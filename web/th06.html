@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>红魔乡 · AI 避弹实验</title><style>
+*{box-sizing:border-box}body{margin:0;background:#10151c;color:#e5e9ef;font:15px/1.6 system-ui}main{max-width:1150px;margin:20px auto;padding:0 16px}h1{font-size:24px}section{display:flex;gap:20px;flex-wrap:wrap}iframe{width:min(100%,800px);height:600px;border:1px solid #53687b;background:black}aside{flex:1;min-width:240px}label{display:block;margin:16px 0}input[type=range]{display:block;width:100%}button{padding:8px 16px;background:#243443;border:1px solid #53687b;border-radius:5px;color:white;cursor:pointer}pre{white-space:pre-wrap;color:#a6d8c5}a{color:#91c9fc}.hint{color:#a8b7c9;font-size:14px}
+</style><main><h1>红魔乡 · 真实关卡避弹</h1><section><iframe id="game" src="./th06-runtime/th06.html" allow="autoplay; fullscreen; gamepad" title="红魔乡"></iframe><aside>
+<button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
+<label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
+<label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
+<pre id="stats">加载游戏…</pre>
+<p class="hint">先用方向键与 Z 选择机体、难度并开局，进入关卡后 AI 自动操作自机。Esc 暂停，X 可手动放雷。对话和菜单由你操作。点“AI：开启”可切回手动。</p>
+<p class="hint">THPrac 已启用：从主菜单 Practice 选择机体后进入练习设置。F12 打开高级选项，Backspace 打开功能菜单，Tab 切换统计面板。练习／高级菜单打开时 AI 交还控制，关闭后恢复。</p>
+<p class="hint">本页是单自机接管实验。读取游戏内部弹幕与碰撞大小，输出普通按键；不开无敌、不改游戏随机数。特殊变速、反弹和新生成弹的预判之后继续适配。</p>
+<a href="./">返回合成弹幕演示</a>
+</aside></section></main><script type="module">
+const $=id=>document.getElementById(id);let enabled=true,core=null;
+function focus(){const win=$('game').contentWindow;win.focus();win.document.getElementById('canvas')?.focus();}
+function configure(){if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;}
+$('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
+$('horizon').oninput=$('beam').oninput=configure;
+setInterval(()=>{
+  try{
+    const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('stats').textContent='正在加载红魔乡资源…';return;}
+    if(core!==m){core=m;core._th06_ai_enable(+enabled);configure();}
+    const get=i=>core._th06_ai_metric(i);enabled=!!get(0);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;
+    $('stats').textContent=`${get(1)?'AI 正在避弹':'等待进入关卡／当前为手动'}\n读取危险物 ${get(4)}\n采集 + 搜索 ${get(2).toFixed(2)} ms\n精细判定 ${get(5)}\n搜索完成 ${get(6)} 帧\n安全前缀 ${get(9)} 帧\n决策次数 ${get(7)}\n状态位 ${get(3)}`;
+  }catch(error){$('stats').textContent=error.message;}
+},250);
+</script></html>

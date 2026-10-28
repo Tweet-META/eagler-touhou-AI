@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eagler Touhou · 避弹 AI</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10151c;color:#e5e9ef;font:16px/1.65 system-ui,sans-serif}main{max-width:1050px;margin:32px auto;padding:0 20px}h1{font-size:25px;margin-bottom:4px}p{color:#a8b7c9}section{display:flex;gap:24px;flex-wrap:wrap}canvas{width:min(100%,480px);height:auto;background:#141f2b;border:1px solid #354657;touch-action:none}aside{flex:1;min-width:260px}label{display:block;margin:14px 0}select,input,button{font:inherit;background:#243443;color:#e5e9ef;border:1px solid #53687b;border-radius:6px;padding:5px 10px}button{cursor:pointer;margin-right:8px}input{width:100%}output{float:right}pre{white-space:pre-wrap;font:14px/1.7 ui-monospace,monospace;color:#a6d8c5}.hint{font-size:14px}.error{color:#ffb4a5}a{color:#91c9fc}
+</style>
+<main><h1>避弹 AI · 基础演示</h1><p>蓝色是 AI 队友，白色由你控制。预判范围有限，目标是轻量、普通水平的避弹。 <a href="./th06.html">进入红魔乡真实关卡实验 →</a></p>
+<section><canvas id="field" width="384" height="448" tabindex="0" aria-label="弹幕演示，方向键移动白色自机，Shift低速"></canvas>
+<aside>
+<div id="status">加载避弹模块…</div>
+<label>弹幕 <select id="pattern"><option value="vortex">高压 · 双涡旋</option><option value="curtain">高压 · 交叉弹墙</option><option value="hell">高压 · 全方位混合</option><option value="rain">交错弹雨</option><option value="aimed">自机狙 + 环形弹</option><option value="lasers">移动激光</option><option value="mixed">混合判定</option></select></label>
+<label>弹幕倍率 <output id="densityValue">3×</output><input id="density" type="range" min="1" max="20" value="3" step="1"></label>
+<label><input id="stress" type="checkbox" checked style="width:auto"> 持续压测（中弹不产生无敌）</label>
+<label>AI 队友数量 <select id="seats"><option>1</option><option>2</option><option>3</option></select></label>
+<label>预判帧数 <output id="horizonValue">12</output><input id="horizon" type="range" min="6" max="24" value="12" step="3"></label>
+<label>保留路线 <output id="beamValue">8</output><input id="beam" type="range" min="2" max="16" value="8" step="2"></label>
+<button id="pause">暂停</button><button id="reset">重新开始</button>
+<pre id="stats"></pre>
+<p class="hint">倍率实时生效。场内上限 4,000 个危险物，达到上限时停止新增；AI 预算保持不变。可关闭持续压测恢复中弹后的无敌。</p>
+<p class="hint">点击弹幕区域后用方向键移动，Shift 低速。切换页面时自动暂停。曲线激光可由作品适配器拆成多条线段。</p>
+<p class="hint">这里是独立演示，还没有改动 Eagler 的正式游戏或联网协议。</p>
+</aside></section></main><script type="module" src="./demo.mjs"></script></html>

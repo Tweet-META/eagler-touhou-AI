@@ -1,0 +1,6 @@
+/build/
+/web/runtime/
+/web/th06-runtime/
+/.cache/
+*.log
+

@@ -1,0 +1,11 @@
+{
+  "name": "eagler-touhou-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "build:th06": "node scripts/build-th06.mjs",
+    "start": "node scripts/serve.mjs"
+  }
+}
