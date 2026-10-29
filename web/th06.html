@@ -5,11 +5,11 @@
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
 <label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
 <label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
-<label>收点权重 <span id="pv">1.5</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="1.5"></label>
+<label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
 <p class="hint">只主动追下半屏道具，上半屏道具落下来后再收。</p>
 <label>输出站位权重 <span id="av">0.2</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.2"></label>
-<label>边缘惩罚权重 <span id="ewv">0.12</span><input id="edgeWeight" type="range" min="0" max="5" step="0.01" value="0.12"></label>
-<label>边缘生效区域 <span id="edv">24</span> 像素<input id="edgeDistance" type="range" min="1" max="160" step="1" value="24"></label>
+<label>边缘惩罚权重 <span id="ewv">1</span><input id="edgeWeight" type="range" min="0" max="5" step="0.01" value="1"></label>
+<label>边缘生效区域 <span id="edv">80</span> 像素<input id="edgeDistance" type="range" min="1" max="160" step="1" value="80"></label>
 <p class="hint">进入边界内指定宽度后开始扣分，越靠边惩罚越大；角落叠加两条边的惩罚。权重设为 0 可关闭。</p>
 <label>危险距离惩罚 <span id="dv">10</span><input id="danger" type="range" min="0" max="100" step="0.5" value="10"></label>
 <label>弹幕密度惩罚 <span id="nv">0.1</span><input id="densityPenalty" type="range" min="0" max="2" step="0.01" value="0.1"></label>

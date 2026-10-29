@@ -15,8 +15,8 @@
 <label>预判帧数 <output id="horizonValue">12</output><input id="horizon" type="range" min="6" max="24" value="12" step="3"></label>
 <label>保留路线 <output id="beamValue">8</output><input id="beam" type="range" min="2" max="16" value="8" step="2"></label>
 <label>弹幕密度惩罚 <output id="densityPenaltyValue">0.1</output><input id="densityPenalty" type="range" min="0" max="2" value="0.1" step="0.01"></label>
-<label>边缘惩罚权重 <output id="edgeWeightValue">0.12</output><input id="edgeWeight" type="range" min="0" max="5" value="0.12" step="0.01"></label>
-<label>边缘生效区域（像素） <output id="edgeDistanceValue">24</output><input id="edgeDistance" type="range" min="1" max="160" value="24" step="1"></label>
+<label>边缘惩罚权重 <output id="edgeWeightValue">1</output><input id="edgeWeight" type="range" min="0" max="5" value="1" step="0.01"></label>
+<label>边缘生效区域（像素） <output id="edgeDistanceValue">80</output><input id="edgeDistance" type="range" min="1" max="160" value="80" step="1"></label>
 <button id="pause">暂停</button><button id="reset">重新开始</button>
 <pre id="stats"></pre>
 <p class="hint">倍率实时生效。场内上限 4,000 个危险物，达到上限时停止新增；AI 预算保持不变。可关闭持续压测恢复中弹后的无敌。</p>

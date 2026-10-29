@@ -106,11 +106,11 @@ void Planner::configure(Settings s){
     s.safetyMargin=positive(s.safetyMargin,.45f,16);
     s.proximityRange=std::max(1.f,positive(s.proximityRange,24,128));
     s.dangerWeight=positive(s.dangerWeight,10,100);s.goalWeight=positive(s.goalWeight,.004f,10);
-    s.edgeWeight=positive(s.edgeWeight,.12f,100);s.movementWeight=positive(s.movementWeight,.002f,10);
-    s.switchWeight=positive(s.switchWeight,.025f,10);s.edgeDistance=std::max(1.f,positive(s.edgeDistance,24,256));
+    s.edgeWeight=positive(s.edgeWeight,1.f,100);s.movementWeight=positive(s.movementWeight,.002f,10);
+    s.switchWeight=positive(s.switchWeight,.025f,10);s.edgeDistance=std::max(1.f,positive(s.edgeDistance,80,256));
     s.mergeDistance=positive(s.mergeDistance,3,64);config_=s;
-    config_.pickupWeight=positive(s.pickupWeight,1.5f,100);
-    config_.pickupApproachWeight=positive(s.pickupApproachWeight,.02625f,10);
+    config_.pickupWeight=positive(s.pickupWeight,3.f,100);
+    config_.pickupApproachWeight=positive(s.pickupApproachWeight,.0525f,10);
     config_.attackWeight=positive(s.attackWeight,.2f,10);
     config_.densityWeight=positive(s.densityWeight,.1f,10);
 }
