@@ -124,6 +124,8 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     for(const auto& item:g_ItemManager.items){
         if(!item.isInUse||item.itemType==ITEM_POINT_BULLET||item.state==1)continue;
         const auto& pos=item.currentPosition;
+        // Only pursue drops after they enter the lower half of the field.
+        if(pos.y<(w.bounds.top+w.bounds.bottom)*.5f)continue;
         if(pos.x<w.bounds.left-16||pos.x>w.bounds.right+16||pos.y>w.bounds.bottom+16)continue;
         const float value=item.itemType==ITEM_LIFE?4.f:item.itemType==ITEM_BOMB?3.f:
             (item.itemType==ITEM_FULL_POWER||item.itemType==ITEM_POWER_BIG)?2.f:item.itemType==ITEM_POINT?.5f:1.f;
