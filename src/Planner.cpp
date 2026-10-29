@@ -185,17 +185,17 @@ Result Planner::decide(const World& w){
         return std::isfinite(best)?best:0.f;
     };
     const auto itemPotential=[&](Vec2 pos,int time,std::uint32_t collected){
-        float best=0;
+        float best=-std::numeric_limits<float>::infinity();
         for(std::size_t j=0;j<pickupCount;++j){
             const auto& item=w.pickups[j];if(collected&(1u<<j))continue;
             if(!finite(item.position)||!finite(item.velocity)||!finite(item.value)||item.value<=0||!finite(item.radius)||item.radius<0)continue;
             const Vec2 location=add(item.position,mul(item.velocity,float(time)));
             const float distance=std::max(0.f,std::sqrt(length2(sub(pos,location)))-item.radius);
-            // A bounded potential guides toward items just beyond this short
-            // horizon, without rewarding a loop back and forth each tick.
-            best=std::max(best,std::min(item.value,10.f)*std::max(0.f,160-distance));
+            // A negative potential is meaningful: keeping it beyond 160 px
+            // provides an approach gradient across the whole playfield.
+            best=std::max(best,std::min(item.value,10.f)*(160-distance));
         }
-        return best;
+        return std::isfinite(best)?best:0.f;
     };
     if(w.incomplete||w.hazardCount>MaxHazards)result.flags|=IncompleteWorld;
     entries_.clear();order_.clear();tree_.clear();
