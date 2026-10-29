@@ -5,12 +5,12 @@
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
 <label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
 <label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
-<label>收点权重 <span id="pv">2</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="2"></label>
-<label>输出站位权重 <span id="av">0.35</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.35"></label>
-<label>危险距离惩罚 <span id="dv">2</span><input id="danger" type="range" min="0" max="100" step="0.5" value="2"></label>
-<label>弹幕密度惩罚 <span id="nv">0.05</span><input id="densityPenalty" type="range" min="0" max="2" step="0.01" value="0.05"></label>
+<label>收点权重 <span id="pv">1.5</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="1.5"></label>
+<label>输出站位权重 <span id="av">0.7</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.7"></label>
+<label>危险距离惩罚 <span id="dv">10</span><input id="danger" type="range" min="0" max="100" step="0.5" value="10"></label>
+<label>弹幕密度惩罚 <span id="nv">0.1</span><input id="densityPenalty" type="range" min="0" max="2" step="0.01" value="0.1"></label>
 <p class="hint">密度统计附近 32 像素内敌弹，越近贡献越大，最多累计 8。权重 0 关闭此项；激光和敌机仍避让，但不计入弹幕密度。</p>
-<p class="hint">危险距离惩罚默认 2，越高越倾向远离子弹；0 只关闭距离扣分，预测碰撞仍会剪枝。</p>
+<p class="hint">危险距离惩罚默认 10，越高越倾向远离子弹；0 只关闭距离扣分，预测碰撞仍会剪枝。</p>
 <pre id="stats">加载游戏…</pre>
 <p class="hint">先用方向键与 Z 选择机体、难度并开局，进入关卡后 AI 自动操作自机。Esc 暂停，X 可手动放雷。对话和菜单由你操作。点“AI：开启”可切回手动。</p>
 <p class="hint">THPrac 已启用：从主菜单 Practice 选择机体后进入练习设置。F12 打开高级选项，Backspace 打开功能菜单，Tab 切换统计面板。练习／高级菜单打开时 AI 交还控制，关闭后恢复。</p>

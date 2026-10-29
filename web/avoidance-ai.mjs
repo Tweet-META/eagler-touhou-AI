@@ -3,8 +3,8 @@ export const Button=Object.freeze({fire:1,focus:2,left:4,right:8,up:16,down:32})
 export const Flag=Object.freeze({budget:1,incomplete:2,noSafePath:4,invalid:8,inactive:16});
 export const defaults=Object.freeze({horizon:12,beamWidth:8,actionFrames:3,maxHazards:2048,
   maxCollisionTests:40000,maxTreeVisits:120000,allowFast:true,fire:true,safetyMargin:.45,
-  proximityRange:24,dangerWeight:2,goalWeight:.004,edgeWeight:.12,movementWeight:.002,switchWeight:.025,mergeDistance:3,
-  pickupWeight:2,pickupApproachWeight:.035,attackWeight:.35,densityWeight:.05});
+  proximityRange:24,dangerWeight:10,goalWeight:.004,edgeWeight:.12,movementWeight:.002,switchWeight:.025,mergeDistance:3,
+  pickupWeight:1.5,pickupApproachWeight:.02625,attackWeight:.7,densityWeight:.1});
 const shapes=Object.freeze({circle:0,box:1,capsule:2});
 export class AvoidanceAI {
   static async load({moduleURL=new URL('./runtime/avoidance.mjs',import.meta.url),...options}={}) {

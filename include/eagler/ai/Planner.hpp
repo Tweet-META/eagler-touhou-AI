@@ -55,11 +55,11 @@ struct Settings {
     int maxHazards=2048;
     std::uint32_t maxCollisionTests=40000, maxTreeVisits=120000;
     float safetyMargin=.45f, proximityRange=24;
-    float dangerWeight=2, goalWeight=.004f, edgeWeight=.12f;
+    float dangerWeight=10, goalWeight=.004f, edgeWeight=.12f;
     float movementWeight=.002f, switchWeight=.025f, edgeDistance=24;
     float mergeDistance=3;
-    float pickupWeight=2, pickupApproachWeight=.035f, attackWeight=.35f;
-    float densityWeight=.05f;
+    float pickupWeight=1.5f, pickupApproachWeight=.02625f, attackWeight=.7f;
+    float densityWeight=.1f;
     bool allowFast=true, fire=true;
 };
 enum ResultFlag : std::uint32_t {
