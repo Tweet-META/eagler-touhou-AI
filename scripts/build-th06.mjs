@@ -59,6 +59,20 @@ const needle='#else\n    return buttons;\n#endif\n}';text=text.replaceAll('\r\n'
 if(!text.includes(needle))throw new Error('TH06 Controller input seam changed; inspect before integrating');
 text='#include "AvoidanceHook.hpp"\n'+text.replace(needle,'#else\n    return Th06Ai::filter(buttons);\n#endif\n}');
 await writeFile(controller,text);
+// Supervisor already owns the common per-seat input commit protocol. Install
+// local human/AI lanes there, before its authoritative-lane guard executes.
+const supervisor=path.join(stage,'src/Supervisor.cpp');
+let supervisorText=(await readFile(supervisor,'utf8')).replaceAll('\r\n','\n');
+const sample='    g_CurFrameInput = Controller::GetInput();';
+if(!supervisorText.includes(sample))throw new Error('TH06 Supervisor input seam changed');
+supervisorText='#include "AvoidanceHook.hpp"\n'+supervisorText.replace(sample,sample+'\n    Th06Ai::commitLocal(g_CurFrameInput);');
+await writeFile(supervisor,supervisorText);
+const manager=path.join(stage,'src/GameManager.cpp');
+let managerText=(await readFile(manager,'utf8')).replaceAll('\r\n','\n');
+const seed='    g_Rng.generationCount = 0;';
+if(!managerText.includes(seed))throw new Error('TH06 stage setup seam changed');
+managerText='#include "AvoidanceHook.hpp"\n'+managerText.replace(seed,'    Th06Ai::configureSession();\n'+seed);
+await writeFile(manager,managerText);
 const shellFile=path.join(stage,'resources/shell.html');
 let shell=await readFile(shellFile,'utf8');
 if(!shell.includes('thpracEnabled: false'))throw new Error('TH06 shell option seam changed');
@@ -71,11 +85,11 @@ await run(cmake,['-S',stage,'-B',binary,'-G','Ninja',`-DCMAKE_MAKE_PROGRAM=${nin
   `-DCMAKE_TOOLCHAIN_FILE=${path.join(sdk,'upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake')}`,
   `-DEAGLER_COMMON_ROOT=${path.join(source,'common')}`,`-DTH06_ASSET_ROOT=${path.join(build,'assets')}`,
   '-DCMAKE_BUILD_TYPE=Release','-DTH_EXTERNAL_ASSETS=OFF','-DTH_WEB_SHARED_FONT=OFF','-DTH_WEB_MUSIC=BASE',
-  '-DTH_ENABLE_NETPLAY=OFF','-DTH_ENABLE_MULTIPLAYER_GAMEPLAY=OFF',`-DTH_ENABLE_THPRAC=${thprac?'ON':'OFF'}`,'-DTH_ENABLE_THCRAP=OFF',
+  '-DTH_ENABLE_NETPLAY=OFF','-DTH_ENABLE_MULTIPLAYER_GAMEPLAY=ON',`-DTH_ENABLE_THPRAC=${thprac?'ON':'OFF'}`,'-DTH_ENABLE_THCRAP=OFF',
   ...(thprac?[`-DTH_UNIFONT_FILE=${path.resolve(unicode)}`]:[]),
   '-DSDL_TESTS=OFF','-DSDL_TEST_LIBRARY=OFF','-DSDLIMAGE_SAMPLES=OFF','-DSDLIMAGE_TESTS=OFF',
   '-DSDLTTF_SAMPLES=OFF','-DSDLTTF_TESTS=OFF','-DSDLTTF_PLUTOSVG=OFF']);
 await run(cmake,['--build',binary,'--target','th06','--parallel',arg('jobs')??'6']);
 for(const name of ['th06.html','th06.js','th06.wasm','th06.data'])await copyFile(path.join(binary,name),path.join(output,name));
-await writeFile(path.join(build,'source.json'),JSON.stringify({source:path.resolve(source),dependencies:pins,assets:path.resolve(assets),thprac,gameExecuted:false},null,2));
+await writeFile(path.join(build,'source.json'),JSON.stringify({source:path.resolve(source),dependencies:pins,assets:path.resolve(assets),thprac,localCoop:true,playerCount:2,netplay:false,gameExecuted:false},null,2));
 console.log('TH06 AI ready: http://127.0.0.1:8144/th06.html');

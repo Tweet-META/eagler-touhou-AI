@@ -1,4 +1,4 @@
-// Compiled into an isolated TH06 normal runtime. Reads the live collision
+// Compiled into an isolated TH06 local runtime. Reads the live collision
 // objects; only the returned logical input word enters authoritative state.
 #include "AvoidanceHook.hpp"
 #include <eagler/ai/Planner.hpp>
@@ -7,6 +7,10 @@
 #include "ItemManager.hpp"
 #include "Gui.hpp"
 #include "Supervisor.hpp"
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+#include "multiplayer/GameplaySession.hpp"
+#include <eagler/netplay/NetplayInput.hpp>
+#endif
 #ifdef TH_ENABLE_THPRAC
 #include "PracticeRuntime.hpp"
 #endif
@@ -21,8 +25,8 @@
 #else
 #define AI_EXPORT
 #endif
-#if defined(TH_ENABLE_MULTIPLAYER_GAMEPLAY) || defined(TH_ENABLE_NETPLAY)
-#error This experimental adapter is for the normal local TH06 runtime.
+#if defined(TH_ENABLE_NETPLAY)
+#error Local AI seats must not be attached to a network session.
 #endif
 namespace {
 using namespace eagler::ai;
@@ -38,6 +42,14 @@ Result result;
 double elapsedMs=0;
 std::uint64_t decisions=0;
 int active=0;
+bool ownsInputs=false;
+::Player& controlledPlayer(){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    return g_Players[1];
+#else
+    return g_Player;
+#endif
+}
 void add(const Hazard& h){if(count<hazards.size())hazards[count++]=h;else overflow=true;}
 void lasers(float scale,int horizon){
     for(const auto& laser:g_BulletManager.lasers){
@@ -88,14 +100,15 @@ std::uint16_t map(std::uint32_t b){
 }
 }
 std::uint16_t Th06Ai::filter(std::uint16_t input){
+    const auto& controlled=controlledPlayer();
     const bool key=SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_F8];
     if(key&&!f8){enabled=!enabled;planner.reset();lastFrame=std::numeric_limits<u32>::max();}f8=key;
     active=enabled&&g_Supervisor.curState==SUPERVISOR_STATE_GAMEMANAGER&&
         !g_GameManager.isInReplay&&!g_GameManager.demoMode&&!g_GameManager.isInGameMenu&&
         !g_GameManager.isInRetryMenu&&!g_GameManager.isGameCompleted&&!g_GameManager.isTimeStopped&&
-        !g_Gui.HasCurrentMsgIdx()&&g_Player.chainCalc&&
-        (g_Player.playerState==PLAYER_STATE_ALIVE||g_Player.playerState==PLAYER_STATE_INVULNERABLE)&&
-        !g_Player.bombInfo.isInUse;
+        !g_Gui.HasCurrentMsgIdx()&&controlled.chainCalc&&
+        (controlled.playerState==PLAYER_STATE_ALIVE||controlled.playerState==PLAYER_STATE_INVULNERABLE)&&
+        !controlled.bombInfo.isInUse;
 #ifdef TH_ENABLE_THPRAC
     active=active&&!PracticeRuntime::CapturesGameInput();
 #endif
@@ -108,7 +121,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     lastFrame=g_GameManager.gameFrames;lastStage=u32(g_GameManager.currentStage);
     const auto begin=SDL_GetPerformanceCounter();count=0;overflow=false;
     const float scale=g_Supervisor.effectiveFramerateMultiplier;
-    World w;const auto& p=g_Player;const auto& gm=g_GameManager;
+    World w;const auto& p=controlled;const auto& gm=g_GameManager;
     w.player.position={p.positionCenter.x,p.positionCenter.y};
     // TH06 uses an axis-aligned player square; its circumscribed circle is a
     // conservative fit for the shared planner's circular player geometry.
@@ -173,6 +186,36 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     if(result.flags&(IncompleteWorld|InvalidWorld)){cached=input&owned;return input;}
     cached=map(result.buttons);return apply(cached);
 }
+void Th06Ai::configureSession(){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    if(g_GameManager.isInReplay||g_GameManager.demoMode)return;
+    MultiplayerGameplay::SessionState session;
+    session.playerCount=2;session.localPlayer=0;session.showStagePlayerNames=true;
+    session.showContributionStats=true;
+    session.players[0].active=session.players[1].active=true;
+    session.players[0].character=g_GameManager.character;session.players[0].shot=g_GameManager.shotType;
+    session.players[1].character=g_GameManager.character==0?1:0;session.players[1].shot=0;
+    MultiplayerGameplay::Configure(session);
+    planner.reset();lastFrame=std::numeric_limits<u32>::max();
+#endif
+}
+void Th06Ai::commitLocal(std::uint16_t humanInput){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    if(g_GameManager.isInReplay||g_GameManager.demoMode){
+        if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
+        active=0;return;
+    }
+    if(!MultiplayerGameplay::IsMultiplayer()){
+        if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
+        return;
+    }
+    std::array<std::uint16_t,TH06_MULTI_MAX_PLAYERS> inputs{};
+    inputs[0]=humanInput;inputs[1]=filter(0);
+    Netplay::Input::SetPlayerButtonOverrides(inputs.data(),inputs.size());ownsInputs=true;
+#else
+    (void)humanInput;
+#endif
+}
 extern "C" {
 AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();lastFrame=std::numeric_limits<u32>::max();}
 AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
@@ -198,6 +241,13 @@ AI_EXPORT void th06_ai_density(float weight){
 AI_EXPORT double th06_ai_metric(int field){
     switch(field){case 0:return enabled;case 1:return active;case 2:return elapsedMs;case 3:return result.flags;
     case 4:return double(count);case 5:return result.stats.collisionTests;case 6:return result.stats.completedFrames;
-    case 7:return double(decisions);case 8:return g_GameManager.currentStage;case 9:return result.safeFrames;default:return 0;}
+    case 7:return double(decisions);case 8:return g_GameManager.currentStage;case 9:return result.safeFrames;
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
+    case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);
+    case 14:return GetPlayerPower(0);case 15:return GetPlayerPower(1);
+    case 16:return g_Players[1].playerState;case 17:return GetPlayerBombs(0);case 18:return GetPlayerBombs(1);
+#endif
+    default:return 0;}
 }
 }

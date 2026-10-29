@@ -2,7 +2,7 @@
 
 面向 Eagler Touhou 本地 AI 队友的轻量避弹核心。C++17 实现，可嵌入原生作品，也可编译为 WebAssembly 接入网页版。
 
-对应 [eagler-touhou #144](https://github.com/Ritosa2333/eagler-touhou/issues/144)。提供基础避弹、独立座位输入接口、浏览器演示，以及[红魔乡真实关卡接入](integrations/th06/README.md)。本地多自机和菜单入口由各作品接入。
+对应 [eagler-touhou #144](https://github.com/Ritosa2333/eagler-touhou/issues/144)。提供基础避弹、独立座位输入接口、浏览器演示，以及[红魔乡本地合作接入](integrations/th06/README.md)：P1 真人 + P2 AI，使用作品已有的多人战斗与资源规则。
 
 ## 默认策略
 
