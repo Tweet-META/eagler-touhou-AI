@@ -126,7 +126,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
         const auto& pos=item.currentPosition;
         if(pos.x<w.bounds.left-16||pos.x>w.bounds.right+16||pos.y>w.bounds.bottom+16)continue;
         const float value=item.itemType==ITEM_LIFE?4.f:item.itemType==ITEM_BOMB?3.f:
-            (item.itemType==ITEM_FULL_POWER||item.itemType==ITEM_POWER_BIG)?2.f:1.f;
+            (item.itemType==ITEM_FULL_POWER||item.itemType==ITEM_POWER_BIG)?2.f:item.itemType==ITEM_POINT?.5f:1.f;
         Pickup point;point.position={pos.x,pos.y};
         point.velocity={std::clamp(pos.x-item.prevPosition.x,-4.f,4.f),std::clamp(pos.y-item.prevPosition.y,-4.f,4.f)};
         point.radius=std::min(p.grabItemSize.x,p.grabItemSize.y);point.value=value;
