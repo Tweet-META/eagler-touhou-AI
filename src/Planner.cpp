@@ -176,11 +176,14 @@ Result Planner::decide(const World& w){
             const auto& enemy=w.targets[j];
             if(!finite(enemy.position)||!finite(enemy.velocity)||!finite(enemy.halfWidth)||enemy.halfWidth<0||!finite(enemy.value)||enemy.value<=0)continue;
             const Vec2 target=add(enemy.position,mul(enemy.velocity,float(time)));
-            if(pos.y<=target.y)continue;
             const float gap=std::max(0.f,std::abs(pos.x-target.x)-enemy.halfWidth);
-            // Keep a gradient across the entire field, even when no route
-            // reaches the firing column in this short planning horizon.
-            best=std::max(best,std::min(enemy.value,4.f)*(1-gap/160));
+            const float aboveGap=std::max(0.f,target.y+16-pos.y);
+            const bool firingColumn=pos.y>target.y&&gap==0;
+            // A common distance baseline on BOTH sides prevents an above-target
+            // zero score from beating a distant below-target negative score.
+            // Only actual below-and-aligned positions get the output bonus.
+            const float score=(firingColumn?1.f:0.f)-gap/160-aboveGap/80;
+            best=std::max(best,std::min(enemy.value,4.f)*score);
         }
         return std::isfinite(best)?best:0.f;
     };

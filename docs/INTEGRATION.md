@@ -92,3 +92,5 @@ target_link_libraries(your_title PRIVATE eagler::ai)
 调用 `<eagler/ai/Planner.hpp>` 的 `Planner::decide(World)`，无需 SDL、浏览器或网络依赖。浏览器分发 `web/avoidance-ai.mjs`、`web/eagler-adapter.mjs` 和构建生成的 `web/runtime/avoidance.mjs/.wasm`；使用同源静态托管。主仓库可将此库纳入 `common`，或固定来源提交作为独立依赖。
 
 当前统一默认预设：预判 12 帧，保留 8 条路线，收点权重 1.5，输出站位权重 0.7，危险距离惩罚 10，密度惩罚 0.1。C++、Web 桥接和试玩页面使用相同默认值。
+
+输出站位同时考虑两轴：自机必须在敌人下方且进入敌人横向半宽，才获得实际输出奖励。接近引导在敌人上、下方使用同一基线，横向偏离与尚未移动到敌人下方的纵向距离都会扣分，消除上方返回零分反而胜过下方远处负分的漏洞。纵向引导指向敌人下方 16 像素，接触碰撞仍由危险物判定剪枝。
