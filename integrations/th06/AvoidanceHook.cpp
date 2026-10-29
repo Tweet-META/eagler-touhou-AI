@@ -181,6 +181,10 @@ AI_EXPORT void th06_ai_objectives(float pickup,float attack){
     auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=attack;
     planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
 }
+AI_EXPORT void th06_ai_danger(float weight){
+    auto s=planner.settings();s.dangerWeight=weight;planner.configure(s);
+    lastFrame=std::numeric_limits<u32>::max();
+}
 AI_EXPORT double th06_ai_metric(int field){
     switch(field){case 0:return enabled;case 1:return active;case 2:return elapsedMs;case 3:return result.flags;
     case 4:return double(count);case 5:return result.stats.collisionTests;case 6:return result.stats.completedFrames;
