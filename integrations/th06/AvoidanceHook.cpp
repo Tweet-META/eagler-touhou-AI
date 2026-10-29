@@ -70,7 +70,7 @@ void lasers(float scale,int horizon){
                 if(timer>=laser.despawnDuration)break;
             }
             if(collidable){
-                Hazard h;h.shape=Shape::Box;
+                Hazard h;h.shape=Shape::Box;h.densityScale=0;
                 const float mid=(start+end)*.5f;
                 h.position={laser.pos.x+cs*mid,laser.pos.y+sn*mid};
                 h.halfSize={std::max(0.f,length)*.5f,std::max(0.f,laser.width)*.25f};
@@ -160,7 +160,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     for(const auto& enemy:g_EnemyManager.enemies){
         if(!enemy.flags.isSlotOccupied||!enemy.flags.hasBeenInBounds||enemy.flags.isInvisible||
            !enemy.flags.isCollidable||!enemy.flags.isInteractable)continue;
-        Hazard h;h.shape=Shape::Box;h.position={enemy.position.x,enemy.position.y};
+        Hazard h;h.shape=Shape::Box;h.densityScale=0;h.position={enemy.position.x,enemy.position.y};
         h.velocity={enemy.position.x-enemy.prevPosition.x,enemy.position.y-enemy.prevPosition.y};
         h.halfSize={enemy.hitboxDimensions.x/3.f,enemy.hitboxDimensions.y/3.f};add(h);
     }
@@ -183,6 +183,10 @@ AI_EXPORT void th06_ai_objectives(float pickup,float attack){
 }
 AI_EXPORT void th06_ai_danger(float weight){
     auto s=planner.settings();s.dangerWeight=weight;planner.configure(s);
+    lastFrame=std::numeric_limits<u32>::max();
+}
+AI_EXPORT void th06_ai_density(float weight){
+    auto s=planner.settings();s.densityWeight=weight;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT double th06_ai_metric(int field){

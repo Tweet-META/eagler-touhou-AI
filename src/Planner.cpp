@@ -78,7 +78,7 @@ template<class B> float lowerBound2(B b,Vec2 a,Vec2 c){
 bool valid(const Hazard& h){
     return std::uint32_t(h.shape)<=2&&finite(h.position)&&finite(h.velocity)&&finite(h.acceleration)&&
         finite(h.end)&&finite(h.endVelocity)&&finite(h.halfSize)&&finite(h.radius)&&finite(h.angle)&&finite(h.angularVelocity)&&
-        h.radius>=0&&h.halfSize.x>=0&&h.halfSize.y>=0;
+        h.radius>=0&&h.halfSize.x>=0&&h.halfSize.y>=0&&finite(h.densityScale)&&h.densityScale>=0;
 }
 float positive(float x,float fallback,float maximum){return finite(x)&&x>=0?std::min(x,maximum):fallback;}
 Vec2 direction(std::uint32_t b){
@@ -112,6 +112,7 @@ void Planner::configure(Settings s){
     config_.pickupWeight=positive(s.pickupWeight,2,100);
     config_.pickupApproachWeight=positive(s.pickupApproachWeight,.035f,10);
     config_.attackWeight=positive(s.attackWeight,.35f,10);
+    config_.densityWeight=positive(s.densityWeight,.05f,10);
 }
 int Planner::build(int begin,int end){
     const int id=int(tree_.size());tree_.push_back({});
@@ -129,20 +130,25 @@ int Planner::build(int begin,int end){
     }
     return id;
 }
-bool Planner::clearance(Vec2 from,Vec2 to,int frame,float radius,Statistics& stats,float& margin) const {
-    margin=config_.proximityRange;if(tree_.empty())return true;
+bool Planner::clearance(Vec2 from,Vec2 to,int frame,float radius,Statistics& stats,float& margin,float& density) const {
+    margin=config_.proximityRange;density=0;if(tree_.empty())return true;
     std::array<int,32> stack{};int count=1;stack[0]=0;
     while(count){
         if(stats.treeVisits>=config_.maxTreeVisits)return false;
         ++stats.treeVisits;const auto& n=tree_[stack[--count]];
-        const float range=std::max(0.f,margin+radius);
+        // Keep searching the density neighborhood until its capped penalty is
+        // saturated, then resume nearest-only pruning. Zero weight is free.
+        const float range=std::max(config_.densityWeight>0&&density<8?32.f:0.f,margin)+radius;
         if(lowerBound2(n.bounds,from,to)>range*range)continue;
         if(n.left>=0){stack[count++]=n.right;stack[count++]=n.left;continue;}
         for(int i=n.begin;i<n.end;++i){
             const auto& h=entries_[order_[i]].hazard;
             if(frame<h.activeFrom||frame-1>h.activeUntil)continue;
             if(stats.collisionTests>=config_.maxCollisionTests)return false;
-            ++stats.collisionTests;margin=std::min(margin,distance(h,from,to,frame,radius));
+            ++stats.collisionTests;const float d=distance(h,from,to,frame,radius);
+            margin=std::min(margin,d);
+            if(config_.densityWeight>0&&h.densityScale>0&&frame>=h.activeFrom&&frame<=h.activeUntil)
+                density=std::min(8.f,density+std::min(1.f,h.densityScale)*std::max(0.f,1-std::max(0.f,d)/32));
             if(margin<config_.safetyMargin)return true;
         }
     }
@@ -193,7 +199,7 @@ Result Planner::decide(const World& w){
     };
     if(w.incomplete||w.hazardCount>MaxHazards)result.flags|=IncompleteWorld;
     entries_.clear();order_.clear();tree_.clear();
-    const float reach=std::max(p.fastSpeed,p.slowSpeed)*c.horizon+p.radius+c.proximityRange;
+    const float reach=std::max(p.fastSpeed,p.slowSpeed)*c.horizon+p.radius+std::max(c.proximityRange,c.densityWeight>0?32.f:0.f);
     for(std::size_t i=0;i<std::min<std::size_t>(w.hazardCount,MaxHazards);++i){
         const auto& h=w.hazards[i];if(!valid(h)){result.flags|=IncompleteWorld;continue;}
         if(h.activeFrom>c.horizon||h.activeUntil<0||h.activeFrom>h.activeUntil)continue;
@@ -232,13 +238,14 @@ Result Planner::decide(const World& w){
                 bool safe=true;
                 for(int f=1;f<=span;++f){
                     Vec2 to=add(r.p,move);to.x=std::clamp(to.x,b.left,b.right);to.y=std::clamp(to.y,b.top,b.bottom);
-                    float margin=c.proximityRange;
+                    float margin=c.proximityRange,density=0;
                     if(elapsed+f>p.invulnerableFrames){
-                        if(!clearance(r.p,to,elapsed+f,p.radius,result.stats,margin)){exhausted=true;safe=false;break;}
+                        if(!clearance(r.p,to,elapsed+f,p.radius,result.stats,margin,density)){exhausted=true;safe=false;break;}
                         if(margin<c.safetyMargin){safe=false;break;}
                     }
                     r.margin=std::min(r.margin,margin);
                     r.cost+=c.dangerWeight/(std::max(.1f,margin)+2);
+                    r.cost+=c.densityWeight*density;
                     // The idle goal must not pull against collection/attack.
                     if(!objectives)r.cost+=c.goalWeight*(std::abs(to.x-w.goal.x)+std::abs(to.y-w.goal.y));
                     r.cost+=c.edgeWeight*edgeCost(to,b,c.edgeDistance);

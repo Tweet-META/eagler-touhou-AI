@@ -31,7 +31,7 @@ await run(python,[path.join(emsdk,'upstream','emscripten','em++.py'),'-std=c++17
   '--no-entry','-sMODULARIZE=1','-sEXPORT_ES6=1','-sENVIRONMENT=web,worker,node',
   '-sFILESYSTEM=0','-sINITIAL_MEMORY=16777216','-sALLOW_MEMORY_GROWTH=0',
   "-sEXPORTED_RUNTIME_METHODS=['HEAPF32','HEAP32']",
-  "-sEXPORTED_FUNCTIONS=['_ai_abi_version','_ai_create','_ai_destroy','_ai_reset','_ai_settings','_ai_begin','_ai_objective_weights','_ai_objective','_ai_hazards','_ai_count','_ai_step','_ai_result']",
+  "-sEXPORTED_FUNCTIONS=['_ai_abi_version','_ai_create','_ai_destroy','_ai_reset','_ai_settings','_ai_begin','_ai_density','_ai_objective_weights','_ai_objective','_ai_hazards','_ai_count','_ai_step','_ai_result']",
   '-o',path.join(build,'avoidance.mjs')]);
 for(const file of ['avoidance.mjs','avoidance.wasm'])await copyFile(path.join(build,file),path.join(dest,file));
 process.stdout.write(`Browser module written to ${dest}\n`);

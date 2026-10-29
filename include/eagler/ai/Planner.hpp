@@ -17,6 +17,7 @@ struct Hazard {
     Vec2 halfSize{};
     float radius=0, angle=0, angularVelocity=0;
     int activeFrom=0, activeUntil=24;
+    float densityScale=1; // 0 excludes lasers/enemies from bullet density.
 };
 struct Player {
     Vec2 position{};
@@ -58,6 +59,7 @@ struct Settings {
     float movementWeight=.002f, switchWeight=.025f, edgeDistance=24;
     float mergeDistance=3;
     float pickupWeight=2, pickupApproachWeight=.035f, attackWeight=.35f;
+    float densityWeight=.05f;
     bool allowFast=true, fire=true;
 };
 enum ResultFlag : std::uint32_t {
@@ -105,6 +107,6 @@ private:
     std::vector<Route> beam_,next_,candidates_;
     int build(int begin,int end);
     bool clearance(Vec2 from,Vec2 to,int frame,float playerRadius,
-                   Statistics& stats,float& margin) const;
+                   Statistics& stats,float& margin,float& density) const;
 };
 } // namespace eagler::ai

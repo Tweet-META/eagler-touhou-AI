@@ -18,9 +18,10 @@ function setup(){
 }
 function configure(){
   $('horizonValue').textContent=$('horizon').value;$('beamValue').textContent=$('beam').value;
+  $('densityPenaltyValue').textContent=$('densityPenalty').value;
   const count=players.length-1;
   for(const p of players)if(p.ai)p.ai.configure({horizon:+$('horizon').value,beamWidth:+$('beam').value,
-    maxHazards:4096,maxCollisionTests:Math.floor(40000/count),maxTreeVisits:Math.floor(120000/count)});
+    densityWeight:+$('densityPenalty').value,maxHazards:4096,maxCollisionTests:Math.floor(40000/count),maxTreeVisits:Math.floor(120000/count)});
 }
 function spawn(h){if(hazards.length<capacity)hazards.push(h);else limitedSpawns++;}
 function circle(x,y,angle,speed,radius=3){spawn({shape:'circle',x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,radius});}
@@ -160,6 +161,7 @@ window.addEventListener('blur',()=>setPaused(true));document.addEventListener('v
 $('pause').onclick=()=>setPaused(!paused);$('reset').onclick=()=>setup();
 $('pattern').onchange=$('seats').onchange=()=>setup();$('horizon').oninput=$('beam').oninput=()=>configure();
 $('density').oninput=()=>{density=+$('density').value;$('densityValue').textContent=`${density}×`;};
+$('densityPenalty').oninput=configure;
 try{
   first=await AvoidanceAI.load();setup();$('status').textContent='已加载 · C++ / WebAssembly';requestAnimationFrame(animation);
 }catch(error){$('status').className='error';$('status').textContent=`启动失败：${error.message}。请先运行 npm run build:web。`;}

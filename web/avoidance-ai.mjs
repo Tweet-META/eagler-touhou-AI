@@ -4,7 +4,7 @@ export const Flag=Object.freeze({budget:1,incomplete:2,noSafePath:4,invalid:8,in
 export const defaults=Object.freeze({horizon:12,beamWidth:8,actionFrames:3,maxHazards:2048,
   maxCollisionTests:40000,maxTreeVisits:120000,allowFast:true,fire:true,safetyMargin:.45,
   proximityRange:24,dangerWeight:2,goalWeight:.004,edgeWeight:.12,movementWeight:.002,switchWeight:.025,mergeDistance:3,
-  pickupWeight:2,pickupApproachWeight:.035,attackWeight:.35});
+  pickupWeight:2,pickupApproachWeight:.035,attackWeight:.35,densityWeight:.05});
 const shapes=Object.freeze({circle:0,box:1,capsule:2});
 export class AvoidanceAI {
   static async load({moduleURL=new URL('./runtime/avoidance.mjs',import.meta.url),...options}={}) {
@@ -12,12 +12,12 @@ export class AvoidanceAI {
     return new AvoidanceAI(await create(),options);
   }
   constructor(core,options={}) {
-    if(core._ai_abi_version()!==2)throw new Error('Unsupported avoidance AI ABI; rebuild the Web module');
+    if(core._ai_abi_version()!==3)throw new Error('Unsupported avoidance AI ABI; rebuild the Web module');
     this.core=core;this.handle=core._ai_create();
     if(!this.handle)throw new Error('At most eight AI instances may share one module');
     const address=core._ai_hazards(this.handle);
-    this.floats=new Float32Array(core.HEAPF32.buffer,address,4096*18);
-    this.ints=new Int32Array(core.HEAP32.buffer,address,4096*18);
+    this.floats=new Float32Array(core.HEAPF32.buffer,address,4096*19);
+    this.ints=new Int32Array(core.HEAP32.buffer,address,4096*19);
     this.resultView=new Float32Array(core.HEAPF32.buffer,core._ai_result(this.handle),12);
     this.count=0;this.overflow=false;
     this.settings={...defaults};this.configure(options);
@@ -32,6 +32,7 @@ export class AvoidanceAI {
       s.maxCollisionTests,s.maxTreeVisits,+s.allowFast,+s.fire,s.safetyMargin,s.proximityRange,s.dangerWeight,
       s.goalWeight,s.edgeWeight,s.movementWeight,s.switchWeight,s.mergeDistance);
     this.core._ai_objective_weights(this.handle,s.pickupWeight,s.pickupApproachWeight,s.attackWeight);
+    this.core._ai_density(this.handle,s.densityWeight);
   }
   reset(){this.check();this.core._ai_reset(this.handle);}
   // begin/add/finish avoids creating a JS array of every bullet each tick.
@@ -45,12 +46,12 @@ export class AvoidanceAI {
   hazard(h) {
     this.check();if(this.count===4096){this.overflow=true;return false;}
     const shape=typeof h.shape==='number'?h.shape:shapes[h.shape??'circle'];
-    const a=this.count++*18,f=this.floats,i=this.ints;
+    const a=this.count++*19,f=this.floats,i=this.ints;
     i[a]=shape??-1;f[a+1]=h.x;f[a+2]=h.y;f[a+3]=h.vx??0;f[a+4]=h.vy??0;
     f[a+5]=h.ax??0;f[a+6]=h.ay??0;f[a+7]=h.endX??0;f[a+8]=h.endY??0;
     f[a+9]=h.endVx??0;f[a+10]=h.endVy??0;f[a+11]=h.halfWidth??0;f[a+12]=h.halfHeight??0;
     f[a+13]=h.radius??0;f[a+14]=h.angle??0;f[a+15]=h.angularVelocity??0;
-    i[a+16]=h.activeFrom??0;i[a+17]=h.activeUntil??24;return true;
+    i[a+16]=h.activeFrom??0;i[a+17]=h.activeUntil??24;f[a+18]=h.densityScale??1;return true;
   }
   pickup(item){this.check();return !!this.core._ai_objective(this.handle,0,item.x,item.y,item.vx??0,item.vy??0,item.radius??8,item.value??1);}
   target(enemy){this.check();return !!this.core._ai_objective(this.handle,1,enemy.x,enemy.y,enemy.vx??0,enemy.vy??0,enemy.halfWidth??16,enemy.value??1);}
