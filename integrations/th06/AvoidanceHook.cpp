@@ -4,6 +4,7 @@
 #include <eagler/ai/Planner.hpp>
 #include "Player.hpp"
 #include "EnemyManager.hpp"
+#include "ItemManager.hpp"
 #include "Gui.hpp"
 #include "Supervisor.hpp"
 #ifdef TH_ENABLE_THPRAC
@@ -27,6 +28,8 @@ namespace {
 using namespace eagler::ai;
 Planner planner;
 std::array<Hazard,Planner::MaxHazards> hazards;
+std::array<Pickup,Planner::MaxPickups> pickups;
+std::array<AttackTarget,Planner::MaxTargets> targets;
 std::size_t count=0;
 bool enabled=true,wasActive=false,overflow=false,f8=false;
 u32 lastFrame=std::numeric_limits<u32>::max(),lastStage=0;
@@ -116,6 +119,37 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
         gm.playerMovementAreaTopLeftPos.x+gm.playerMovementAreaSize.x,
         gm.playerMovementAreaTopLeftPos.y+gm.playerMovementAreaSize.y};
     w.goal={(w.bounds.left+w.bounds.right)*.5f,w.bounds.bottom-64};
+    // Rank once per tick rather than inspect every item inside every route.
+    std::array<std::pair<float,Pickup>,513> rankedItems{};std::size_t itemCount=0;
+    for(const auto& item:g_ItemManager.items){
+        if(!item.isInUse||item.itemType==ITEM_POINT_BULLET||item.state==1)continue;
+        const auto& pos=item.currentPosition;
+        if(pos.x<w.bounds.left-16||pos.x>w.bounds.right+16||pos.y>w.bounds.bottom+16)continue;
+        const float value=item.itemType==ITEM_LIFE?4.f:item.itemType==ITEM_BOMB?3.f:
+            (item.itemType==ITEM_FULL_POWER||item.itemType==ITEM_POWER_BIG)?2.f:1.f;
+        Pickup point;point.position={pos.x,pos.y};
+        point.velocity={std::clamp(pos.x-item.prevPosition.x,-4.f,4.f),std::clamp(pos.y-item.prevPosition.y,-4.f,4.f)};
+        point.radius=std::min(p.grabItemSize.x,p.grabItemSize.y);point.value=value;
+        rankedItems[itemCount++]={std::hypot(pos.x-p.positionCenter.x,pos.y-p.positionCenter.y)/value,point};
+    }
+    std::sort(rankedItems.begin(),rankedItems.begin()+itemCount,[](const auto& a,const auto& b){return a.first<b.first;});
+    w.pickupCount=std::min(itemCount,pickups.size());
+    for(std::size_t j=0;j<w.pickupCount;++j)pickups[j]=rankedItems[j].second;
+    w.pickups=pickups.data();
+    std::array<std::pair<float,AttackTarget>,257> rankedTargets{};std::size_t enemyCount=0;
+    for(const auto& enemy:g_EnemyManager.enemies){
+        if(!enemy.flags.isSlotOccupied||enemy.flags.isInvisible||!enemy.flags.isInteractable||!enemy.flags.isDamageable||enemy.life<=0)continue;
+        const auto& pos=enemy.position;
+        if(pos.x<0||pos.x>384||pos.y<0||pos.y>448)continue;
+        AttackTarget target;target.position={pos.x,pos.y};
+        target.velocity={pos.x-enemy.prevPosition.x,pos.y-enemy.prevPosition.y};
+        target.halfWidth=std::max(8.f,enemy.hitboxDimensions.x*.5f);target.value=1;
+        rankedTargets[enemyCount++]={std::abs(pos.x-p.positionCenter.x)+(pos.y>=p.positionCenter.y?448.f:0.f),target};
+    }
+    std::sort(rankedTargets.begin(),rankedTargets.begin()+enemyCount,[](const auto& a,const auto& b){return a.first<b.first;});
+    w.targetCount=std::min(enemyCount,targets.size());
+    for(std::size_t j=0;j<w.targetCount;++j)targets[j]=rankedTargets[j].second;
+    w.targets=targets.data();
     for(const auto& bullet:g_BulletManager.bullets){
         if(bullet.state!=BULLET_STATE_FIRED)continue;
         Hazard h;h.shape=Shape::Box;h.position={bullet.pos.x,bullet.pos.y};
@@ -142,6 +176,10 @@ AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();lastFr
 AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
     auto s=planner.settings();s.horizon=horizon;s.beamWidth=beam;s.maxHazards=4096;
     s.maxCollisionTests=std::uint32_t(std::max(1,budget));planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
+}
+AI_EXPORT void th06_ai_objectives(float pickup,float attack){
+    auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=attack;
+    planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT double th06_ai_metric(int field){
     switch(field){case 0:return enabled;case 1:return active;case 2:return elapsedMs;case 3:return result.flags;

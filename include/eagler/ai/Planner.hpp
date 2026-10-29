@@ -27,12 +27,24 @@ struct Player {
 enum Button : std::uint32_t {
     Fire=1, Focus=2, Left=4, Right=8, Up=16, Down=32
 };
+struct Pickup {
+    Vec2 position{},velocity{};
+    float radius=8,value=1;
+};
+struct AttackTarget {
+    Vec2 position{},velocity{};
+    float halfWidth=16,value=1;
+};
 struct World {
     Player player;
     Bounds bounds;
     Vec2 goal{192,360};
     const Hazard* hazards=nullptr;
     std::size_t hazardCount=0;
+    const Pickup* pickups=nullptr;
+    std::size_t pickupCount=0;
+    const AttackTarget* targets=nullptr;
+    std::size_t targetCount=0;
     bool active=true;
     // The producer sets this when it cannot describe the full danger field.
     bool incomplete=false;
@@ -45,6 +57,7 @@ struct Settings {
     float dangerWeight=2, goalWeight=.004f, edgeWeight=.12f;
     float movementWeight=.002f, switchWeight=.025f, edgeDistance=24;
     float mergeDistance=3;
+    float pickupWeight=2, pickupApproachWeight=.035f, attackWeight=.35f;
     bool allowFast=true, fire=true;
 };
 enum ResultFlag : std::uint32_t {
@@ -67,7 +80,7 @@ struct Result {
 // Scratch vectors are reserved once; normal decide() calls do not allocate.
 class Planner {
 public:
-    static constexpr int MaxHorizon=24, MaxBeam=16, MaxHazards=4096;
+    static constexpr int MaxHorizon=24, MaxBeam=16, MaxHazards=4096, MaxPickups=32, MaxTargets=8;
     explicit Planner(Settings settings={});
     void configure(Settings settings);
     const Settings& settings() const { return config_; }
@@ -81,6 +94,7 @@ private:
         Vec2 p{},firstPosition{};
         std::uint32_t first=0,last=0;
         std::uint32_t ordinal=0;
+        std::uint32_t collected=0;
         float cost=0,margin=10000;
     };
     Settings config_;

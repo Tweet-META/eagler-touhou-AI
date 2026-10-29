@@ -19,6 +19,7 @@ export class LocalAiSeat {
     this.ai.begin(this.adapter.world(this.seat,context));
     // Emit into the reusable bridge rather than allocate per-bullet JS objects.
     this.adapter.hazards(this.seat,context,this.ai);
+    this.adapter.objectives?.(this.seat,context,this.ai);
     const result=this.ai.finish();
     if(result.flags&(Flag.incomplete|Flag.invalid|Flag.inactive)){
       this.adapter.release?.(this.seat);this.adapter.unavailable?.(this.seat,result);return result;

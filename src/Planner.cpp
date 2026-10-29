@@ -109,6 +109,9 @@ void Planner::configure(Settings s){
     s.edgeWeight=positive(s.edgeWeight,.12f,100);s.movementWeight=positive(s.movementWeight,.002f,10);
     s.switchWeight=positive(s.switchWeight,.025f,10);s.edgeDistance=std::max(1.f,positive(s.edgeDistance,24,256));
     s.mergeDistance=positive(s.mergeDistance,3,64);config_=s;
+    config_.pickupWeight=positive(s.pickupWeight,2,100);
+    config_.pickupApproachWeight=positive(s.pickupApproachWeight,.035f,10);
+    config_.attackWeight=positive(s.attackWeight,.35f,10);
 }
 int Planner::build(int begin,int end){
     const int id=int(tree_.size());tree_.push_back({});
@@ -153,10 +156,27 @@ Result Planner::decide(const World& w){
        !finite(p.slowSpeed)||p.slowSpeed<0||!finite(w.goal)||!finite(b.left)||!finite(b.top)||
        !finite(b.right)||!finite(b.bottom)||b.left>b.right||b.top>b.bottom||
        p.position.x<b.left||p.position.x>b.right||p.position.y<b.top||p.position.y>b.bottom||
-       (w.hazardCount&&!w.hazards)){
+       (w.hazardCount&&!w.hazards)||(w.pickupCount&&!w.pickups)||(w.targetCount&&!w.targets)){
         result.flags=InvalidWorld;previous_=0;return result;
     }
     result.buttons=(c.fire?Fire:0u)|Focus;
+    const auto pickupCount=std::min<std::size_t>(w.pickupCount,MaxPickups);
+    const auto targetCount=std::min<std::size_t>(w.targetCount,MaxTargets);
+    const bool objectives=(pickupCount&&(c.pickupWeight>0||c.pickupApproachWeight>0))||
+        (targetCount&&c.fire&&c.attackWeight>0);
+    const auto itemPotential=[&](Vec2 pos,int time,std::uint32_t collected){
+        float best=0;
+        for(std::size_t j=0;j<pickupCount;++j){
+            const auto& item=w.pickups[j];if(collected&(1u<<j))continue;
+            if(!finite(item.position)||!finite(item.velocity)||!finite(item.value)||item.value<=0||!finite(item.radius)||item.radius<0)continue;
+            const Vec2 location=add(item.position,mul(item.velocity,float(time)));
+            const float distance=std::max(0.f,std::sqrt(length2(sub(pos,location)))-item.radius);
+            // A bounded potential guides toward items just beyond this short
+            // horizon, without rewarding a loop back and forth each tick.
+            best=std::max(best,std::min(item.value,10.f)*std::max(0.f,160-distance));
+        }
+        return best;
+    };
     if(w.incomplete||w.hazardCount>MaxHazards)result.flags|=IncompleteWorld;
     entries_.clear();order_.clear();tree_.clear();
     const float reach=std::max(p.fastSpeed,p.slowSpeed)*c.horizon+p.radius+c.proximityRange;
@@ -205,9 +225,33 @@ Result Planner::decide(const World& w){
                     }
                     r.margin=std::min(r.margin,margin);
                     r.cost+=c.dangerWeight/(std::max(.1f,margin)+2);
-                    r.cost+=c.goalWeight*(std::abs(to.x-w.goal.x)+std::abs(to.y-w.goal.y));
+                    // Existing idle goal remains a weak fallback when there
+                    // are actionable objectives rather than anchoring to bottom.
+                    r.cost+=c.goalWeight*(objectives?.15f:1.f)*(std::abs(to.x-w.goal.x)+std::abs(to.y-w.goal.y));
                     r.cost+=c.edgeWeight*edgeCost(to,b,c.edgeDistance);
                     r.cost+=c.movementWeight*(std::abs(to.x-r.p.x)+std::abs(to.y-r.p.y));
+                    r.cost+=c.pickupApproachWeight*(itemPotential(r.p,elapsed+f-1,r.collected)-itemPotential(to,elapsed+f,r.collected));
+                    for(std::size_t j=0;j<pickupCount;++j){
+                        const auto& item=w.pickups[j];const auto bit=1u<<j;
+                        if((r.collected&bit)||!finite(item.position)||!finite(item.velocity)||!finite(item.radius)||item.radius<0||!finite(item.value)||item.value<=0)continue;
+                        const Vec2 a=sub(r.p,add(item.position,mul(item.velocity,float(elapsed+f-1))));
+                        const Vec2 z=sub(to,add(item.position,mul(item.velocity,float(elapsed+f))));
+                        if(pointSegment2({},a,z)<=item.radius*item.radius){
+                            r.cost-=c.pickupWeight*std::min(item.value,10.f);r.collected|=bit;
+                        }
+                    }
+                    float attack=0;
+                    if(c.fire)for(std::size_t j=0;j<targetCount;++j){
+                        const auto& enemy=w.targets[j];
+                        if(!finite(enemy.position)||!finite(enemy.velocity)||!finite(enemy.halfWidth)||enemy.halfWidth<0||!finite(enemy.value)||enemy.value<=0)continue;
+                        const Vec2 target=add(enemy.position,mul(enemy.velocity,float(elapsed+f)));
+                        if(to.y<=target.y)continue;
+                        const float gap=std::max(0.f,std::abs(to.x-target.x)-enemy.halfWidth);
+                        // Soft shoulder aligns with enemies before reaching the
+                        // firing column; reward never scales with enemy count.
+                        attack=std::max(attack,std::min(enemy.value,4.f)*std::max(0.f,1-gap/160));
+                    }
+                    r.cost-=c.attackWeight*attack;
                     r.p=to;if(!elapsed&&f==1)r.firstPosition=to;
                     const int time=elapsed+f;
                     if(time>fallbackTime||(time==fallbackTime&&r.cost<fallback.cost)){fallback=r;fallbackTime=time;}
@@ -226,7 +270,7 @@ Result Planner::decide(const World& w){
             for(const auto& selected:next_){
                 // Keep first-input diversity: two nearby endpoints may require
                 // different immediate actions to survive the next replanning.
-                if(candidate.first==selected.first&&length2(sub(candidate.p,selected.p))<c.mergeDistance*c.mergeDistance){duplicate=true;break;}
+                if(candidate.first==selected.first&&candidate.collected==selected.collected&&length2(sub(candidate.p,selected.p))<c.mergeDistance*c.mergeDistance){duplicate=true;break;}
             }
             if(!duplicate)next_.push_back(candidate);
             if(int(next_.size())==c.beamWidth)break;

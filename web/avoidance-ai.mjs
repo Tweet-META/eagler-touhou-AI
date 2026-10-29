@@ -3,7 +3,8 @@ export const Button=Object.freeze({fire:1,focus:2,left:4,right:8,up:16,down:32})
 export const Flag=Object.freeze({budget:1,incomplete:2,noSafePath:4,invalid:8,inactive:16});
 export const defaults=Object.freeze({horizon:12,beamWidth:8,actionFrames:3,maxHazards:2048,
   maxCollisionTests:40000,maxTreeVisits:120000,allowFast:true,fire:true,safetyMargin:.45,
-  proximityRange:24,dangerWeight:2,goalWeight:.004,edgeWeight:.12,movementWeight:.002,switchWeight:.025,mergeDistance:3});
+  proximityRange:24,dangerWeight:2,goalWeight:.004,edgeWeight:.12,movementWeight:.002,switchWeight:.025,mergeDistance:3,
+  pickupWeight:2,pickupApproachWeight:.035,attackWeight:.35});
 const shapes=Object.freeze({circle:0,box:1,capsule:2});
 export class AvoidanceAI {
   static async load({moduleURL=new URL('./runtime/avoidance.mjs',import.meta.url),...options}={}) {
@@ -11,7 +12,7 @@ export class AvoidanceAI {
     return new AvoidanceAI(await create(),options);
   }
   constructor(core,options={}) {
-    if(core._ai_abi_version()!==1)throw new Error('Unsupported avoidance AI ABI');
+    if(core._ai_abi_version()!==2)throw new Error('Unsupported avoidance AI ABI; rebuild the Web module');
     this.core=core;this.handle=core._ai_create();
     if(!this.handle)throw new Error('At most eight AI instances may share one module');
     const address=core._ai_hazards(this.handle);
@@ -30,6 +31,7 @@ export class AvoidanceAI {
     this.settings=s;this.core._ai_settings(this.handle,s.horizon,s.beamWidth,s.actionFrames,s.maxHazards,
       s.maxCollisionTests,s.maxTreeVisits,+s.allowFast,+s.fire,s.safetyMargin,s.proximityRange,s.dangerWeight,
       s.goalWeight,s.edgeWeight,s.movementWeight,s.switchWeight,s.mergeDistance);
+    this.core._ai_objective_weights(this.handle,s.pickupWeight,s.pickupApproachWeight,s.attackWeight);
   }
   reset(){this.check();this.core._ai_reset(this.handle);}
   // begin/add/finish avoids creating a JS array of every bullet each tick.
@@ -50,6 +52,8 @@ export class AvoidanceAI {
     f[a+13]=h.radius??0;f[a+14]=h.angle??0;f[a+15]=h.angularVelocity??0;
     i[a+16]=h.activeFrom??0;i[a+17]=h.activeUntil??24;return true;
   }
+  pickup(item){this.check();return !!this.core._ai_objective(this.handle,0,item.x,item.y,item.vx??0,item.vy??0,item.radius??8,item.value??1);}
+  target(enemy){this.check();return !!this.core._ai_objective(this.handle,1,enemy.x,enemy.y,enemy.vx??0,enemy.vy??0,enemy.halfWidth??16,enemy.value??1);}
   finish() {
     this.check();this.core._ai_count(this.handle,this.count,+this.overflow);this.core._ai_step(this.handle);
     const a=this.resultView,r=this.output;
@@ -57,6 +61,6 @@ export class AvoidanceAI {
     r.collisionTests=a[7];r.treeVisits=a[8];r.expanded=a[9];r.indexedHazards=a[10];r.completedFrames=a[11];
     return r; // Reused; copy explicitly if retaining history.
   }
-  decide(world) {this.begin(world);for(const h of world.hazards??[])this.hazard(h);return this.finish();}
+  decide(world) {this.begin(world);for(const h of world.hazards??[])this.hazard(h);for(const item of world.pickups??[])this.pickup(item);for(const enemy of world.targets??[])this.target(enemy);return this.finish();}
   dispose(){if(this.handle){this.core._ai_destroy(this.handle);this.handle=0;}}
 }

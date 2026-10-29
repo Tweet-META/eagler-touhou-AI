@@ -5,6 +5,8 @@
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
 <label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
 <label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
+<label>收点权重 <span id="pv">2</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="2"></label>
+<label>输出站位权重 <span id="av">0.35</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.35"></label>
 <pre id="stats">加载游戏…</pre>
 <p class="hint">先用方向键与 Z 选择机体、难度并开局，进入关卡后 AI 自动操作自机。Esc 暂停，X 可手动放雷。对话和菜单由你操作。点“AI：开启”可切回手动。</p>
 <p class="hint">THPrac 已启用：从主菜单 Practice 选择机体后进入练习设置。F12 打开高级选项，Backspace 打开功能菜单，Tab 切换统计面板。练习／高级菜单打开时 AI 交还控制，关闭后恢复。</p>
@@ -13,9 +15,10 @@
 </aside></section></main><script type="module">
 const $=id=>document.getElementById(id);let enabled=true,core=null;
 function focus(){const win=$('game').contentWindow;win.focus();win.document.getElementById('canvas')?.focus();}
-function configure(){if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;}
+function configure(){if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,+$('attack').value);$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
 $('horizon').oninput=$('beam').oninput=configure;
+$('pickup').oninput=$('attack').oninput=configure;
 setInterval(()=>{
   try{
     const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('stats').textContent='正在加载红魔乡资源…';return;}

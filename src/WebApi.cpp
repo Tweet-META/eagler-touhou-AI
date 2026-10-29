@@ -12,6 +12,8 @@ struct Context {
     Planner planner;
     World world;
     std::array<Hazard,Planner::MaxHazards> hazards;
+    std::array<Pickup,Planner::MaxPickups> pickups;
+    std::array<AttackTarget,Planner::MaxTargets> targets;
     std::array<float,12> output{};
 };
 // Independent local teammates. The frontend owns an instance for each seat.
@@ -19,7 +21,7 @@ std::array<std::unique_ptr<Context>,8> contexts;
 Context* get(int handle){return handle>=1&&handle<=int(contexts.size())?contexts[handle-1].get():nullptr;}
 }
 extern "C" {
-int ai_abi_version(){return 1;}
+int ai_abi_version(){return 2;}
 int ai_create(){for(int i=0;i<int(contexts.size());++i)if(!contexts[i]){contexts[i]=std::make_unique<Context>();return i+1;}return 0;}
 void ai_destroy(int handle){if(get(handle))contexts[handle-1].reset();}
 void ai_reset(int handle){if(auto* c=get(handle))c->planner.reset();}
@@ -39,7 +41,21 @@ void ai_begin(int handle,int active,float x,float y,float radius,float fast,floa
         c->world={};c->world.active=active!=0;c->world.incomplete=incomplete!=0;
         c->world.player={{x,y},radius,fast,slow,invulnerability};c->world.bounds={left,top,right,bottom};
         c->world.goal={goalX,goalY};c->world.hazards=c->hazards.data();
+        c->world.pickups=c->pickups.data();c->world.targets=c->targets.data();
     }
+}
+void ai_objective_weights(int handle,float pickup,float approach,float attack){if(auto* c=get(handle)){
+    auto s=c->planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=approach;s.attackWeight=attack;c->planner.configure(s);
+}}
+int ai_objective(int handle,int kind,float x,float y,float vx,float vy,float size,float value){
+    auto* c=get(handle);if(!c)return 0;
+    if(kind==0&&c->world.pickupCount<c->pickups.size()){
+        c->pickups[c->world.pickupCount++]={{x,y},{vx,vy},size,value};return 1;
+    }
+    if(kind==1&&c->world.targetCount<c->targets.size()){
+        c->targets[c->world.targetCount++]={{x,y},{vx,vy},size,value};return 1;
+    }
+    return 0;
 }
 Hazard* ai_hazards(int handle){auto* c=get(handle);return c?c->hazards.data():nullptr;}
 void ai_count(int handle,int count,int incomplete){if(auto* c=get(handle)){

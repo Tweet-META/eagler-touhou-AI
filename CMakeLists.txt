@@ -19,6 +19,6 @@ if(EMSCRIPTEN)
     --no-entry -O3 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker,node
     -sFILESYSTEM=0 -sINITIAL_MEMORY=16777216 -sALLOW_MEMORY_GROWTH=0
     "-sEXPORTED_RUNTIME_METHODS=['HEAPF32','HEAP32']"
-    "-sEXPORTED_FUNCTIONS=['_ai_abi_version','_ai_create','_ai_destroy','_ai_reset','_ai_settings','_ai_begin','_ai_hazards','_ai_count','_ai_step','_ai_result']")
+    "-sEXPORTED_FUNCTIONS=['_ai_abi_version','_ai_create','_ai_destroy','_ai_reset','_ai_settings','_ai_begin','_ai_objective_weights','_ai_objective','_ai_hazards','_ai_count','_ai_step','_ai_result']")
 endif()
 
