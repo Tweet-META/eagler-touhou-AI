@@ -164,6 +164,20 @@ Result Planner::decide(const World& w){
     const auto targetCount=std::min<std::size_t>(w.targetCount,MaxTargets);
     const bool objectives=(pickupCount&&(c.pickupWeight>0||c.pickupApproachWeight>0))||
         (targetCount&&c.fire&&c.attackWeight>0);
+    const auto attackScore=[&](Vec2 pos,int time){
+        float best=-std::numeric_limits<float>::infinity();
+        if(c.fire)for(std::size_t j=0;j<targetCount;++j){
+            const auto& enemy=w.targets[j];
+            if(!finite(enemy.position)||!finite(enemy.velocity)||!finite(enemy.halfWidth)||enemy.halfWidth<0||!finite(enemy.value)||enemy.value<=0)continue;
+            const Vec2 target=add(enemy.position,mul(enemy.velocity,float(time)));
+            if(pos.y<=target.y)continue;
+            const float gap=std::max(0.f,std::abs(pos.x-target.x)-enemy.halfWidth);
+            // Keep a gradient across the entire field, even when no route
+            // reaches the firing column in this short planning horizon.
+            best=std::max(best,std::min(enemy.value,4.f)*(1-gap/160));
+        }
+        return std::isfinite(best)?best:0.f;
+    };
     const auto itemPotential=[&](Vec2 pos,int time,std::uint32_t collected){
         float best=0;
         for(std::size_t j=0;j<pickupCount;++j){
@@ -225,9 +239,8 @@ Result Planner::decide(const World& w){
                     }
                     r.margin=std::min(r.margin,margin);
                     r.cost+=c.dangerWeight/(std::max(.1f,margin)+2);
-                    // Existing idle goal remains a weak fallback when there
-                    // are actionable objectives rather than anchoring to bottom.
-                    r.cost+=c.goalWeight*(objectives?.15f:1.f)*(std::abs(to.x-w.goal.x)+std::abs(to.y-w.goal.y));
+                    // The idle goal must not pull against collection/attack.
+                    if(!objectives)r.cost+=c.goalWeight*(std::abs(to.x-w.goal.x)+std::abs(to.y-w.goal.y));
                     r.cost+=c.edgeWeight*edgeCost(to,b,c.edgeDistance);
                     r.cost+=c.movementWeight*(std::abs(to.x-r.p.x)+std::abs(to.y-r.p.y));
                     r.cost+=c.pickupApproachWeight*(itemPotential(r.p,elapsed+f-1,r.collected)-itemPotential(to,elapsed+f,r.collected));
@@ -240,17 +253,10 @@ Result Planner::decide(const World& w){
                             r.cost-=c.pickupWeight*std::min(item.value,10.f);r.collected|=bit;
                         }
                     }
-                    float attack=0;
-                    if(c.fire)for(std::size_t j=0;j<targetCount;++j){
-                        const auto& enemy=w.targets[j];
-                        if(!finite(enemy.position)||!finite(enemy.velocity)||!finite(enemy.halfWidth)||enemy.halfWidth<0||!finite(enemy.value)||enemy.value<=0)continue;
-                        const Vec2 target=add(enemy.position,mul(enemy.velocity,float(elapsed+f)));
-                        if(to.y<=target.y)continue;
-                        const float gap=std::max(0.f,std::abs(to.x-target.x)-enemy.halfWidth);
-                        // Soft shoulder aligns with enemies before reaching the
-                        // firing column; reward never scales with enemy count.
-                        attack=std::max(attack,std::min(enemy.value,4.f)*std::max(0.f,1-gap/160));
-                    }
+                    const float attack=attackScore(to,elapsed+f);
+                    // Potential shaping rewards immediate alignment progress,
+                    // overcoming action-switch cost without duplicating damage.
+                    r.cost+=8*c.attackWeight*(attackScore(r.p,elapsed+f-1)-attack);
                     r.cost-=c.attackWeight*attack;
                     r.p=to;if(!elapsed&&f==1)r.firstPosition=to;
                     const int time=elapsed+f;
