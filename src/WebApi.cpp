@@ -50,6 +50,9 @@ void ai_objective_weights(int handle,float pickup,float approach,float attack){i
 void ai_density(int handle,float weight){if(auto* c=get(handle)){
     auto s=c->planner.settings();s.densityWeight=weight;c->planner.configure(s);
 }}
+void ai_edges(int handle,float weight,float distance){if(auto* c=get(handle)){
+    auto s=c->planner.settings();s.edgeWeight=weight;s.edgeDistance=distance;c->planner.configure(s);
+}}
 int ai_objective(int handle,int kind,float x,float y,float vx,float vy,float size,float value){
     auto* c=get(handle);if(!c)return 0;
     if(kind==0&&c->world.pickupCount<c->pickups.size()){

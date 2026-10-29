@@ -58,7 +58,7 @@ struct Settings {
     float dangerWeight=10, goalWeight=.004f, edgeWeight=.12f;
     float movementWeight=.002f, switchWeight=.025f, edgeDistance=24;
     float mergeDistance=3;
-    float pickupWeight=1.5f, pickupApproachWeight=.02625f, attackWeight=.7f;
+    float pickupWeight=1.5f, pickupApproachWeight=.02625f, attackWeight=.2f;
     float densityWeight=.1f;
     bool allowFast=true, fire=true;
 };

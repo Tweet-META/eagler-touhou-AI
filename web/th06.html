@@ -7,7 +7,10 @@
 <label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
 <label>收点权重 <span id="pv">1.5</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="1.5"></label>
 <p class="hint">只主动追下半屏道具，上半屏道具落下来后再收。</p>
-<label>输出站位权重 <span id="av">0.7</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.7"></label>
+<label>输出站位权重 <span id="av">0.2</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.2"></label>
+<label>边缘惩罚权重 <span id="ewv">0.12</span><input id="edgeWeight" type="range" min="0" max="5" step="0.01" value="0.12"></label>
+<label>边缘生效区域 <span id="edv">24</span> 像素<input id="edgeDistance" type="range" min="1" max="160" step="1" value="24"></label>
+<p class="hint">进入边界内指定宽度后开始扣分，越靠边惩罚越大；角落叠加两条边的惩罚。权重设为 0 可关闭。</p>
 <label>危险距离惩罚 <span id="dv">10</span><input id="danger" type="range" min="0" max="100" step="0.5" value="10"></label>
 <label>弹幕密度惩罚 <span id="nv">0.1</span><input id="densityPenalty" type="range" min="0" max="2" step="0.01" value="0.1"></label>
 <p class="hint">密度统计附近 32 像素内敌弹，越近贡献越大，最多累计 8。权重 0 关闭此项；激光和敌机仍避让，但不计入弹幕密度。</p>
@@ -20,12 +23,13 @@
 </aside></section></main><script type="module">
 const $=id=>document.getElementById(id);let enabled=true,core=null;
 function focus(){const win=$('game').contentWindow;win.focus();win.document.getElementById('canvas')?.focus();}
-function configure(){if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,+$('attack').value);core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
+function configure(){if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,+$('attack').value);core._th06_ai_edges(+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
 $('horizon').oninput=$('beam').oninput=configure;
 $('pickup').oninput=$('attack').oninput=configure;
 $('danger').oninput=configure;
 $('densityPenalty').oninput=configure;
+$('edgeWeight').oninput=$('edgeDistance').oninput=configure;
 setInterval(()=>{
   try{
     const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('stats').textContent='正在加载红魔乡资源…';return;}

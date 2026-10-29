@@ -187,6 +187,10 @@ AI_EXPORT void th06_ai_danger(float weight){
     auto s=planner.settings();s.dangerWeight=weight;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
+AI_EXPORT void th06_ai_edges(float weight,float distance){
+    auto s=planner.settings();s.edgeWeight=weight;s.edgeDistance=distance;planner.configure(s);
+    lastFrame=std::numeric_limits<u32>::max();
+}
 AI_EXPORT void th06_ai_density(float weight){
     auto s=planner.settings();s.densityWeight=weight;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();

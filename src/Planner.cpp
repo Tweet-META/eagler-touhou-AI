@@ -111,7 +111,7 @@ void Planner::configure(Settings s){
     s.mergeDistance=positive(s.mergeDistance,3,64);config_=s;
     config_.pickupWeight=positive(s.pickupWeight,1.5f,100);
     config_.pickupApproachWeight=positive(s.pickupApproachWeight,.02625f,10);
-    config_.attackWeight=positive(s.attackWeight,.7f,10);
+    config_.attackWeight=positive(s.attackWeight,.2f,10);
     config_.densityWeight=positive(s.densityWeight,.1f,10);
 }
 int Planner::build(int begin,int end){

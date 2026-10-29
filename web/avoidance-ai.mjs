@@ -3,8 +3,8 @@ export const Button=Object.freeze({fire:1,focus:2,left:4,right:8,up:16,down:32})
 export const Flag=Object.freeze({budget:1,incomplete:2,noSafePath:4,invalid:8,inactive:16});
 export const defaults=Object.freeze({horizon:12,beamWidth:8,actionFrames:3,maxHazards:2048,
   maxCollisionTests:40000,maxTreeVisits:120000,allowFast:true,fire:true,safetyMargin:.45,
-  proximityRange:24,dangerWeight:10,goalWeight:.004,edgeWeight:.12,movementWeight:.002,switchWeight:.025,mergeDistance:3,
-  pickupWeight:1.5,pickupApproachWeight:.02625,attackWeight:.7,densityWeight:.1});
+  proximityRange:24,dangerWeight:10,goalWeight:.004,edgeWeight:.12,edgeDistance:24,movementWeight:.002,switchWeight:.025,mergeDistance:3,
+  pickupWeight:1.5,pickupApproachWeight:.02625,attackWeight:.2,densityWeight:.1});
 const shapes=Object.freeze({circle:0,box:1,capsule:2});
 export class AvoidanceAI {
   static async load({moduleURL=new URL('./runtime/avoidance.mjs',import.meta.url),...options}={}) {
@@ -33,6 +33,7 @@ export class AvoidanceAI {
       s.goalWeight,s.edgeWeight,s.movementWeight,s.switchWeight,s.mergeDistance);
     this.core._ai_objective_weights(this.handle,s.pickupWeight,s.pickupApproachWeight,s.attackWeight);
     this.core._ai_density(this.handle,s.densityWeight);
+    this.core._ai_edges(this.handle,s.edgeWeight,s.edgeDistance);
   }
   reset(){this.check();this.core._ai_reset(this.handle);}
   // begin/add/finish avoids creating a JS array of every bullet each tick.
