@@ -203,8 +203,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
         !g_GameManager.isInReplay&&!g_GameManager.demoMode&&!g_GameManager.isInGameMenu&&
         !g_GameManager.isInRetryMenu&&!g_GameManager.isGameCompleted&&!g_GameManager.isTimeStopped&&
         !g_Gui.HasCurrentMsgIdx()&&controlled.chainCalc&&
-        (controlled.playerState==PLAYER_STATE_ALIVE||controlled.playerState==PLAYER_STATE_INVULNERABLE)&&
-        !controlled.bombInfo.isInUse;
+        (controlled.playerState==PLAYER_STATE_ALIVE||controlled.playerState==PLAYER_STATE_INVULNERABLE);
 #ifdef TH_ENABLE_THPRAC
     active=active&&!PracticeRuntime::CapturesGameInput();
 #endif
@@ -223,8 +222,20 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     // TH06 uses an axis-aligned player square; its circumscribed circle is a
     // conservative fit for the shared planner's circular player geometry.
     w.player.radius=std::hypot(p.hitboxSize.x,p.hitboxSize.y);
-    w.player.fastSpeed=p.characterData.orthogonalMovementSpeed*scale;
-    w.player.slowSpeed=p.characterData.orthogonalMovementSpeedFocus*scale;
+    // TH06's Bomb speed modifiers are equal on both axes (Master Spark: 0.3).
+    // Keep planning during Bomb, using its real slowdown instead of stopping.
+    const float movementScale=scale*std::min(p.horizontalMovementSpeedMultiplierDuringBomb,
+                                             p.verticalMovementSpeedMultiplierDuringBomb);
+    w.player.fastSpeed=p.characterData.orthogonalMovementSpeed*movementScale;
+    w.player.slowSpeed=p.characterData.orthogonalMovementSpeedFocus*movementScale;
+    // Player::OnUpdate decrements protection before movement/collision. Only
+    // skip danger queries for the remaining guaranteed protected ticks.
+    if(p.playerState==PLAYER_STATE_INVULNERABLE)
+        w.player.invulnerableFrames=std::max(0,p.invulnerabilityTimer.AsFrames()-1);
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    w.player.invulnerableFrames=std::max(w.player.invulnerableFrames,
+                                       std::max(0,p.teamBombProtectionTimer.AsFrames()-1));
+#endif
     w.bounds={gm.playerMovementAreaTopLeftPos.x,gm.playerMovementAreaTopLeftPos.y,
         gm.playerMovementAreaTopLeftPos.x+gm.playerMovementAreaSize.x,
         gm.playerMovementAreaTopLeftPos.y+gm.playerMovementAreaSize.y};
