@@ -54,6 +54,9 @@ struct World {
     Vec2 formationGoal{}, formationWeight{}, formationSlack{};
     bool measurePressure=false;
     int requiredFirstFocus=-1; // -1 free, 0 released, 1 pressed; first tick only.
+    std::uint32_t committedAction=0;
+    int committedFrames=0; // Unchangeable direction/focus prefix, including this tick.
+    bool commitFirstAction=false; // First focus gesture also lasts actionFrames.
 };
 struct Settings {
     int horizon=12, beamWidth=8, actionFrames=3;

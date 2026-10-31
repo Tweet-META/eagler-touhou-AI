@@ -36,6 +36,18 @@ using namespace eagler::ai;
 Planner planner;
 BombDecision bombDecision;
 InputDelay inputDelay;
+int requestedHorizon=12,actionRemaining=0;
+std::uint32_t heldAction=Focus;
+bool actionTickValid=false;
+u32 actionTickFrame=0,actionTickStage=0;
+void resetAction(){actionRemaining=0;heldAction=Focus;actionTickValid=false;}
+std::uint32_t takeAction(std::uint32_t wanted){
+    const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
+    if(actionTickValid&&frame==actionTickFrame&&stage==actionTickStage)return heldAction;
+    if(!actionRemaining){heldAction=wanted&(Focus|Left|Right|Up|Down);actionRemaining=planner.settings().actionFrames;}
+    --actionRemaining;actionTickValid=true;actionTickFrame=frame;actionTickStage=stage;
+    return heldAction;
+}
 bool inputTickValid=false,wasRescuing=false;
 u32 inputTickFrame=0,inputTickStage=0;
 std::uint16_t deliveredInput=0;
@@ -168,8 +180,8 @@ void formation(World& w){
                          std::clamp(human.positionCenter.y,w.bounds.top,w.bounds.bottom)};
         w.formationWeight={.08f,.08f};w.formationSlack={3,3};
         const float dx=w.player.position.x-human.positionCenter.x,dy=w.player.position.y-human.positionCenter.y;
-        if(dx*dx+dy*dy<=18.f*18.f)
-            w.requiredFirstFocus=(g_GameManager.gameFrames%4)<2?1:0;
+        if(dx*dx+dy*dy<=18.f*18.f&&!w.committedFrames)
+            w.requiredFirstFocus=(heldAction&Focus)?0:1;
         return;
     }
     if(!MultiplayerGameplay::IsMultiplayer()||!MultiplayerGameplay::IsPlayerActive(0)||!human.chainCalc||
@@ -259,7 +271,8 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
 #ifdef TH_ENABLE_THPRAC
     active=active&&!PracticeRuntime::CapturesGameInput();
 #endif
-    if(!active){if(wasActive)planner.reset();resetInput();wasRescuing=false;wasActive=false;lastFrame=std::numeric_limits<u32>::max();return input;}
+    if(!active){if(wasActive)planner.reset();resetInput();resetAction();wasRescuing=false;wasActive=false;lastFrame=std::numeric_limits<u32>::max();return input;}
+    if(actionTickValid&&(actionTickStage!=u32(g_GameManager.currentStage)||g_GameManager.gameFrames<actionTickFrame))resetAction();
     const bool rescuing=rescueWanted();
     if(rescuing!=wasRescuing){resetInput();wasRescuing=rescuing;} // Do not donate again from stale rescue taps.
     applyTeamWeights();
@@ -272,6 +285,8 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     const auto begin=SDL_GetPerformanceCounter();count=0;overflow=false;
     const float scale=g_Supervisor.effectiveFramerateMultiplier;
     World w;const auto& p=controlled;const auto& gm=g_GameManager;
+    w.commitFirstAction=true;w.committedAction=heldAction;
+    w.committedFrames=actionRemaining+(actionTickValid&&actionTickFrame==gm.gameFrames?1:0);
     w.measurePressure=autoBomb;
     w.player.position={p.positionCenter.x,p.positionCenter.y};
     // TH06 uses an axis-aligned player square; its circumscribed circle is a
@@ -349,8 +364,8 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     w.hazards=hazards.data();w.hazardCount=count;w.incomplete=overflow;
     result=planner.decide(w);decisions++;
     elapsedMs=1000.*double(SDL_GetPerformanceCounter()-begin)/double(SDL_GetPerformanceFrequency());
-    if(result.flags&(IncompleteWorld|InvalidWorld)){resetBomb();resetInput();cached=input&owned;return input;}
-    cached=map(result.buttons);
+    if(result.flags&(IncompleteWorld|InvalidWorld)){resetBomb();resetInput();resetAction();cached=input&owned;return input;}
+    cached=map(takeAction(result.buttons)|(result.buttons&Fire));
     if(rescueWanted())cached&=~TH_BUTTON_SHOOT; // Native life-transfer gesture requires no shooting.
     if(updateBomb())cached|=TH_BUTTON_BOMB;
     return apply(deliverInput(cached));
@@ -366,7 +381,7 @@ void Th06Ai::configureSession(){
     session.players[1].character=g_GameManager.character==0?1:0;session.players[1].shot=0;
     MultiplayerGameplay::Configure(session);
     splitSide=0;followHistory.reset();applyTeamWeights();resetBomb();
-    resetInput();wasRescuing=false;
+    resetInput();resetAction();wasRescuing=false;
     humanBombRequested=previousHumanBomb=false;
     planner.reset();lastFrame=std::numeric_limits<u32>::max();
 #endif
@@ -404,13 +419,14 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     if(g_GameManager.isInReplay||g_GameManager.demoMode){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
-        followHistory.reset();resetBomb();resetInput();active=0;return;
+        followHistory.reset();resetBomb();resetInput();resetAction();active=0;return;
     }
     if(!MultiplayerGameplay::IsMultiplayer()){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
         followHistory.reset();
         resetBomb();
         resetInput();
+        resetAction();
         return;
     }
     const bool humanBomb=(humanInput&TH_BUTTON_BOMB)!=0;
@@ -426,7 +442,12 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 #endif
 }
 extern "C" {
-AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();resetBomb();resetInput();lastFrame=std::numeric_limits<u32>::max();}
+AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();resetBomb();resetInput();resetAction();lastFrame=std::numeric_limits<u32>::max();}
+AI_EXPORT void th06_ai_action_duration(int frames){
+    auto s=planner.settings();s.actionFrames=std::clamp(frames,1,12);
+    s.horizon=std::max(requestedHorizon,s.actionFrames);planner.configure(s);
+    planner.reset();resetAction();resetInput();lastFrame=std::numeric_limits<u32>::max();
+}
 AI_EXPORT void th06_ai_input_delay(int delayFrames){
     inputDelay.configure(delayFrames);inputTickValid=false;deliveredInput=0;
     lastFrame=std::numeric_limits<u32>::max();
@@ -441,7 +462,8 @@ AI_EXPORT void th06_ai_team_mode(int mode){
     applyTeamWeights();
 }
 AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
-    auto s=planner.settings();s.horizon=horizon;s.beamWidth=beam;s.maxHazards=4096;
+    requestedHorizon=std::clamp(horizon,1,Planner::MaxHorizon);
+    auto s=planner.settings();s.horizon=std::max(requestedHorizon,s.actionFrames);s.beamWidth=beam;s.maxHazards=4096;
     s.maxCollisionTests=std::uint32_t(std::max(1,budget));planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_objectives(float pickup,float attack){
@@ -471,6 +493,7 @@ AI_EXPORT double th06_ai_metric(int field){
     case 21:return bombDecision.pending()?bombDecision.remainingFrames():-1;
     case 22:return teamWeightsLocked();case 23:return rescueWanted();
     case 24:return deliveredInput;
+    case 26:return actionRemaining;case 27:return planner.settings().horizon;
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
     case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);

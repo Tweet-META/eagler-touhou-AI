@@ -18,6 +18,8 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
+<label>AI 动作持续时间 <span id="adv">0.05 秒（3 帧）</span><input id="actionDuration" type="range" min="1" max="12" step="1" value="3"></label>
+<p class="hint">选定方向（包括停留）和高低速后，在持续时间内保持不变，搜索也按相同长度展开。超过预判帧数时，搜索会延长到至少覆盖完整动作。射击和放雷独立处理；暂停、死亡会立即停止。</p>
 <label>AI 输入延迟 <span id="idv">0.00 秒（0 帧）</span><input id="inputDelay" type="range" min="0" max="30" step="1" value="0"></label>
 <p class="hint">AI 按键整体延后生效，输入延迟会叠加到放雷延迟上。默认 0；暂停、死亡或切换关卡会清空排队输入。</p>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
@@ -60,6 +62,11 @@ function syncTeamControls(){
   $('av').textContent=$('attack').value;$('ewv').textContent=$('edgeWeight').value;
 }
 function focus(){const win=$('game').contentWindow;win.focus();win.document.getElementById('canvas')?.focus();}
+function configureAction(){
+  const frames=+$('actionDuration').value;
+  $('adv').textContent=`${(frames/60).toFixed(2)} 秒（${frames} 帧）`;
+  core?._th06_ai_action_duration(frames);
+}
 function configureInput(){
   const frames=+$('inputDelay').value;
   $('idv').textContent=`${(frames/60).toFixed(2)} 秒（${frames} 帧）`;
@@ -84,19 +91,22 @@ $('teamMode').onchange=()=>{core?._th06_ai_team_mode(+$('teamMode').value);confi
 $('autoBomb').onchange=configureBomb;
 $('bombThreshold').oninput=$('bombConfirm').oninput=$('bombDelay').oninput=configureBomb;
 $('inputDelay').oninput=configureInput;
+$('actionDuration').oninput=configureAction;
 syncTeamControls();
+configureAction();
 configureBomb();
 configureInput();
 setInterval(()=>{
   try{
     const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('status').textContent='正在加载红魔乡资源…';return;}
-    if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();configureBomb();configureInput();}
+    if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();configureAction();configureBomb();configureInput();}
     const get=i=>core._th06_ai_metric(i);enabled=!!get(0);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;
     syncTeamControls();
     $('status').textContent=`${!enabled?'AI 已关闭':!get(1)?'等待游戏／暂停中':get(23)?'AI 正在救援你':$('teamMode').value==='0'&&!get(22)?'AI 正在自主作战':'AI 正在与你并肩作战'}\n你：残机 ${get(12)} · 雷 ${get(17)}\nAI：残机 ${get(13)} · 雷 ${get(18)}`;
     $('stats').textContent=`${get(1)?'P2 AI 正在行动':'P2 AI 等待／停止行动'}\n本地席位 ${get(10)} · Boss伤害倍率 ${get(11).toFixed(2)}\n你：残机 ${get(12)} · 雷 ${get(17)} · 灵力 ${get(14)}\nAI：残机 ${get(13)} · 雷 ${get(18)} · 灵力 ${get(15)}\n读取危险物 ${get(4)}\n采集 + 搜索 ${get(2).toFixed(2)} ms\n精细判定 ${get(5)}\n搜索完成 ${get(6)} 帧\n安全前缀 ${get(9)} 帧\n决策次数 ${get(7)}\n状态位 ${get(3)}`;
     const pressure=get(19),remaining=get(21);
     $('stats').textContent+=`\n实际 AI 按键 0x${get(24).toString(16).toUpperCase()}`;
+    $('stats').textContent+=`\n当前动作剩余 ${get(26)} 帧 · 实际预判 ${get(27)} 帧`;
     $('stats').textContent+=`\n避弹压力 ${pressure<0?'暂无可靠结果':pressure.toFixed(2)}\n主动放雷 ${!$('autoBomb').checked?'已关闭':remaining>=0?`已决定，${(remaining/60).toFixed(2)} 秒后执行`:`确认 ${(get(20)/60).toFixed(2)} 秒`}`;
     if(get(23))$('stats').textContent+='\n合作：优先靠近并救援玩家';
     else if($('teamMode').value==='0'&&!get(22))$('stats').textContent+='\n合作：玩家暂不可跟随，已恢复自主输出与边缘避让';
