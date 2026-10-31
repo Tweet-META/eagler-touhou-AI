@@ -90,7 +90,7 @@ C++ `World` 还可提交 `formationGoal`、`formationWeight` 与 `formationSlack
 
 `World.requiredFirstFocus` 默认 -1，0／1 分别要求首个逻辑帧释放／按下低速；用于作品已有的援助手势。约束启用时首层只推进一帧，并为释放低速提供静止动作，保证实际首帧按键与速度相符；后续预测动作仍可自由选择。TH06 在救援范围内用这个约束输出五次低速点按，复活和扣资源仍由多人核心执行。未启用约束时仍使用原来的 17 种动作与分块长度。
 
-`InputImpairment.hpp` 可放在规划结果到作品座位输入之间。`configure(delayFrames, failureRate)` 设置最多 60 帧延迟和 0～1 的每键按下失败率；`tick(buttons, retryPulseMask=0)` 必须每逻辑帧至多执行一次。失败按键在仍被请求时，每隔“输入延迟 + 6 帧反应时间”重按一次，成功后正常长按，释放时取消重试；释放事件不丢弃。`retryPulseMask` 指定失败后仍保留重试的单帧动作，TH06 仅为 Bomb 设置此掩码；其他短按已不被请求时取消，避免重发过时方向／救援低速。抽签使用本对象的独立随机状态。`reset` 清空延迟、按下和重试状态，`startRun` 同时重置独立种子与统计，`cancelButtons(mask)` 可清除排队及待重试的某类按键。作品仍负责死亡／暂停时释放输入，以及失效 Bomb 的取消；不能把延迟后的按键用于菜单或在录像播放时重新抽签。当前仅 TH06 接入此层，默认零延迟、零失败，通用 Web ABI 未变。
+`InputDelay.hpp` 可放在规划结果到作品座位输入之间。`configure(delayFrames)` 设置最多 60 帧延迟，`tick(buttons)` 必须每逻辑帧至多执行一次；完整按键状态沿固定容量队列延后提交。`reset` 清空排队输入，`cancelButtons(mask)` 可清除排队的某类按键。作品仍负责死亡／暂停时释放输入，以及失效 Bomb 的取消；不能把延迟后的按键用于菜单或在录像播放时再次延迟。当前仅 TH06 接入此层，默认零延迟，通用 Web ABI 未变。
 
 ```cmake
 add_subdirectory(/path/to/eagler-touhou-ai ai)

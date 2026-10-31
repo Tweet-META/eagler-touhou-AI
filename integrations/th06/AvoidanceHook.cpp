@@ -3,7 +3,7 @@
 #include "AvoidanceHook.hpp"
 #include <eagler/ai/Planner.hpp>
 #include <eagler/ai/BombDecision.hpp>
-#include <eagler/ai/InputImpairment.hpp>
+#include <eagler/ai/InputDelay.hpp>
 #include "Player.hpp"
 #include "EnemyManager.hpp"
 #include "ItemManager.hpp"
@@ -35,11 +35,11 @@ namespace {
 using namespace eagler::ai;
 Planner planner;
 BombDecision bombDecision;
-InputImpairment inputImpairment;
+InputDelay inputDelay;
 bool inputTickValid=false,wasRescuing=false;
 u32 inputTickFrame=0,inputTickStage=0;
 std::uint16_t deliveredInput=0;
-void resetInput(){inputImpairment.reset();inputTickValid=false;deliveredInput=0;}
+void resetInput(){inputDelay.reset();inputTickValid=false;deliveredInput=0;}
 bool autoBomb=true,bombTickValid=false,bombPulse=false,humanBombRequested=false,previousHumanBomb=false;
 u32 bombTickFrame=0,bombTickStage=0;
 void resetBomb(){bombDecision.reset();bombTickValid=false;bombPulse=false;}
@@ -149,10 +149,10 @@ std::uint16_t deliverInput(std::uint16_t wanted){
     const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
     if(inputTickValid&&(stage!=inputTickStage||frame<inputTickFrame))resetInput();
     const bool bombAllowed=canBomb();
-    if(!bombAllowed){inputImpairment.cancelButtons(TH_BUTTON_BOMB);wanted&=~TH_BUTTON_BOMB;}
+    if(!bombAllowed){inputDelay.cancelButtons(TH_BUTTON_BOMB);wanted&=~TH_BUTTON_BOMB;}
     if(!inputTickValid||frame!=inputTickFrame){
         inputTickValid=true;inputTickFrame=frame;inputTickStage=stage;
-        deliveredInput=inputImpairment.tick(wanted,TH_BUTTON_BOMB);
+        deliveredInput=inputDelay.tick(wanted);
     }
     // A delayed bomb never survives death/protection or becomes a deathbomb.
     if(!bombAllowed)deliveredInput&=~TH_BUTTON_BOMB;
@@ -366,7 +366,7 @@ void Th06Ai::configureSession(){
     session.players[1].character=g_GameManager.character==0?1:0;session.players[1].shot=0;
     MultiplayerGameplay::Configure(session);
     splitSide=0;followHistory.reset();applyTeamWeights();resetBomb();
-    resetInput();inputImpairment.startRun();wasRescuing=false;
+    resetInput();wasRescuing=false;
     humanBombRequested=previousHumanBomb=false;
     planner.reset();lastFrame=std::numeric_limits<u32>::max();
 #endif
@@ -427,8 +427,8 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 }
 extern "C" {
 AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();resetBomb();resetInput();lastFrame=std::numeric_limits<u32>::max();}
-AI_EXPORT void th06_ai_input_config(int delayFrames,float failureRate){
-    inputImpairment.configure(delayFrames,failureRate);inputTickValid=false;deliveredInput=0;
+AI_EXPORT void th06_ai_input_delay(int delayFrames){
+    inputDelay.configure(delayFrames);inputTickValid=false;deliveredInput=0;
     lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_bomb_config(int value,float threshold,int confirmationFrames,int delayFrames){
@@ -470,7 +470,7 @@ AI_EXPORT double th06_ai_metric(int field){
     case 20:return bombDecision.highFrames();
     case 21:return bombDecision.pending()?bombDecision.remainingFrames():-1;
     case 22:return teamWeightsLocked();case 23:return rescueWanted();
-    case 24:return deliveredInput;case 25:return inputImpairment.failedPresses();
+    case 24:return deliveredInput;
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
     case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);
