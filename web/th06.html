@@ -14,7 +14,7 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
 <pre id="status" role="status">加载游戏…</pre>
 <details id="advanced"><summary>高级选项</summary>
-<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。不太聪明的ai与弱弱？！目前参数相同：6 帧预判、2 条路线、动作 6 帧、输入延迟 2 帧。其他参数不随档位改变。</p>
+<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。不太聪明的ai：6 帧预判、2 条路线、动作 6 帧、输入延迟 1 帧、切换动作惩罚 0.100。弱弱？！：6 帧预判、2 条路线、动作 12 帧、输入延迟 2 帧、切换动作惩罚 2.000。其他参数不随档位改变。</p>
 <p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
@@ -47,8 +47,8 @@ const strengths={
   strong:{horizon:6,beam:2,actionDuration:1,inputDelay:0},
   stronger:{horizon:12,beam:8,actionDuration:1,inputDelay:0},
   capable:{horizon:6,beam:2,actionDuration:3,inputDelay:1},
-  clumsy:{horizon:6,beam:2,actionDuration:6,inputDelay:2},
-  weak:{horizon:6,beam:2,actionDuration:6,inputDelay:2},
+  clumsy:{horizon:6,beam:2,actionDuration:6,inputDelay:1,switchWeight:0.1},
+  weak:{horizon:6,beam:2,actionDuration:12,inputDelay:2,switchWeight:2},
 };
 function syncStrength(){
   const matches=preset=>Object.entries(preset).every(([id,value])=>+$(id).value===value);
@@ -82,6 +82,7 @@ function configureInput(){
   core?._th06_ai_input_delay(frames);
 }
 function configureSwitch(){
+  syncStrength();
   $('swv').textContent=(+$('switchWeight').value).toFixed(3);
   core?._th06_ai_switch_weight(+$('switchWeight').value);
 }
@@ -94,7 +95,7 @@ $('horizon').oninput=$('beam').oninput=configure;
 $('strength').onchange=()=>{
   const preset=strengths[$('strength').value];
   for(const [id,value] of Object.entries(preset))$(id).value=value;
-  configure();configureAction();configureInput();configureBomb();focus();
+  configure();configureAction();configureInput();configureSwitch();configureBomb();focus();
 };
 $('pickup').oninput=$('attack').oninput=configure;
 $('danger').oninput=configure;
