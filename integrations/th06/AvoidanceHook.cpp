@@ -2,6 +2,7 @@
 // objects; only the returned logical input word enters authoritative state.
 #include "AvoidanceHook.hpp"
 #include <eagler/ai/Planner.hpp>
+#include <eagler/ai/BombDecision.hpp>
 #include "Player.hpp"
 #include "EnemyManager.hpp"
 #include "ItemManager.hpp"
@@ -31,6 +32,10 @@
 namespace {
 using namespace eagler::ai;
 Planner planner;
+BombDecision bombDecision;
+bool autoBomb=true,bombTickValid=false,bombPulse=false,humanBombRequested=false,previousHumanBomb=false;
+u32 bombTickFrame=0,bombTickStage=0;
+void resetBomb(){bombDecision.reset();bombTickValid=false;bombPulse=false;}
 std::array<Hazard,Planner::MaxHazards> hazards;
 std::array<Pickup,Planner::MaxPickups> pickups;
 std::array<AttackTarget,Planner::MaxTargets> targets;
@@ -88,6 +93,27 @@ void sampleTeammate(){
 #else
     return g_Player;
 #endif
+}
+bool updateBomb(){
+    const auto& player=controlledPlayer();
+    bool eligible=autoBomb&&player.playerState==PLAYER_STATE_ALIVE&&!player.bombInfo.isInUse&&
+                  player.bombInfo.calc&&player.respawnTimer!=0;
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    eligible=eligible&&GetPlayerBombs(1)>0&&player.teamBombProtectionTimer.AsFrames()<=0&&!humanBombRequested;
+    for(int i=0;i<MultiplayerGameplay::GetPlayerCount();++i)
+        if(i!=1&&MultiplayerGameplay::IsPlayerActive(i)&&g_Players[i].bombInfo.isInUse)eligible=false;
+#else
+    eligible=eligible&&g_GameManager.bombsRemaining>0;
+#endif
+    if(!eligible){resetBomb();return false;}
+    const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
+    if(bombTickValid){
+        if(stage!=bombTickStage||frame<bombTickFrame)resetBomb();
+        else if(frame==bombTickFrame)return bombPulse;
+    }
+    bombTickValid=true;bombTickFrame=frame;bombTickStage=stage;
+    bombPulse=bombDecision.tick(result.pressure.score,result.pressure.valid);
+    return bombPulse;
 }
 void add(const Hazard& h){if(count<hazards.size())hazards[count++]=h;else overflow=true;}
 void formation(World& w){
@@ -166,6 +192,12 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     const auto& controlled=controlledPlayer();
     const bool key=SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_F8];
     if(key&&!f8){enabled=!enabled;planner.reset();lastFrame=std::numeric_limits<u32>::max();}f8=key;
+    // Pause/tool menus freeze the pending delay. Death, dialogue, protection
+    // and leaving play cancel it; no response is synthesized after being hit.
+    if(!enabled||g_Supervisor.curState!=SUPERVISOR_STATE_GAMEMANAGER||
+       g_GameManager.isInReplay||g_GameManager.demoMode||g_GameManager.isGameCompleted||
+       g_Gui.HasCurrentMsgIdx()||!controlled.chainCalc||controlled.playerState!=PLAYER_STATE_ALIVE||
+       controlled.bombInfo.isInUse)resetBomb();
     active=enabled&&g_Supervisor.curState==SUPERVISOR_STATE_GAMEMANAGER&&
         !g_GameManager.isInReplay&&!g_GameManager.demoMode&&!g_GameManager.isInGameMenu&&
         !g_GameManager.isInRetryMenu&&!g_GameManager.isGameCompleted&&!g_GameManager.isTimeStopped&&
@@ -178,13 +210,14 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     if(!active){if(wasActive)planner.reset();wasActive=false;lastFrame=std::numeric_limits<u32>::max();return input;}
     if(!wasActive||g_GameManager.currentStage!=int(lastStage)||g_GameManager.gameFrames<lastFrame)planner.reset();
     wasActive=true;
-    constexpr std::uint16_t owned=TH_BUTTON_DIRECTION|TH_BUTTON_FOCUS|TH_BUTTON_SHOOT;
+    constexpr std::uint16_t owned=TH_BUTTON_DIRECTION|TH_BUTTON_FOCUS|TH_BUTTON_SHOOT|TH_BUTTON_BOMB;
     const auto apply=[&](std::uint16_t ai){return std::uint16_t((input&~owned)|ai);};
     if(lastFrame==g_GameManager.gameFrames&&lastStage==u32(g_GameManager.currentStage))return apply(cached);
     lastFrame=g_GameManager.gameFrames;lastStage=u32(g_GameManager.currentStage);
     const auto begin=SDL_GetPerformanceCounter();count=0;overflow=false;
     const float scale=g_Supervisor.effectiveFramerateMultiplier;
     World w;const auto& p=controlled;const auto& gm=g_GameManager;
+    w.measurePressure=autoBomb;
     w.player.position={p.positionCenter.x,p.positionCenter.y};
     // TH06 uses an axis-aligned player square; its circumscribed circle is a
     // conservative fit for the shared planner's circular player geometry.
@@ -247,8 +280,10 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     w.hazards=hazards.data();w.hazardCount=count;w.incomplete=overflow;
     result=planner.decide(w);decisions++;
     elapsedMs=1000.*double(SDL_GetPerformanceCounter()-begin)/double(SDL_GetPerformanceFrequency());
-    if(result.flags&(IncompleteWorld|InvalidWorld)){cached=input&owned;return input;}
-    cached=map(result.buttons);return apply(cached);
+    if(result.flags&(IncompleteWorld|InvalidWorld)){resetBomb();cached=input&owned;return input;}
+    cached=map(result.buttons);
+    if(updateBomb())cached|=TH_BUTTON_BOMB;
+    return apply(cached);
 }
 void Th06Ai::configureSession(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
@@ -260,7 +295,8 @@ void Th06Ai::configureSession(){
     session.players[0].character=g_GameManager.character;session.players[0].shot=g_GameManager.shotType;
     session.players[1].character=g_GameManager.character==0?1:0;session.players[1].shot=0;
     MultiplayerGameplay::Configure(session);
-    splitSide=0;followHistory.reset();applyTeamWeights();
+    splitSide=0;followHistory.reset();applyTeamWeights();resetBomb();
+    humanBombRequested=previousHumanBomb=false;
     planner.reset();lastFrame=std::numeric_limits<u32>::max();
 #endif
 }
@@ -268,13 +304,18 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     if(g_GameManager.isInReplay||g_GameManager.demoMode){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
-        followHistory.reset();active=0;return;
+        followHistory.reset();resetBomb();active=0;return;
     }
     if(!MultiplayerGameplay::IsMultiplayer()){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
         followHistory.reset();
+        resetBomb();
         return;
     }
+    const bool humanBomb=(humanInput&TH_BUTTON_BOMB)!=0;
+    humanBombRequested=humanBomb&&!previousHumanBomb&&GetPlayerBombs(0)>0&&
+        (g_Players[0].playerState==PLAYER_STATE_ALIVE||g_Players[0].playerState==PLAYER_STATE_INVULNERABLE);
+    previousHumanBomb=humanBomb;
     sampleTeammate();
     std::array<std::uint16_t,TH06_MULTI_MAX_PLAYERS> inputs{};
     inputs[0]=humanInput;inputs[1]=filter(0);
@@ -284,7 +325,11 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 #endif
 }
 extern "C" {
-AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();lastFrame=std::numeric_limits<u32>::max();}
+AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();resetBomb();lastFrame=std::numeric_limits<u32>::max();}
+AI_EXPORT void th06_ai_bomb_config(int value,float threshold,int confirmationFrames,int delayFrames){
+    autoBomb=value!=0;bombDecision.configure(threshold,confirmationFrames,delayFrames);
+    bombTickValid=false;bombPulse=false;lastFrame=std::numeric_limits<u32>::max();
+}
 AI_EXPORT void th06_ai_team_mode(int mode){
     if(mode<0||mode>1)return;
     teamMode=mode;splitSide=0;planner.reset();lastFrame=std::numeric_limits<u32>::max();
@@ -316,6 +361,9 @@ AI_EXPORT double th06_ai_metric(int field){
     switch(field){case 0:return enabled;case 1:return active;case 2:return elapsedMs;case 3:return result.flags;
     case 4:return double(count);case 5:return result.stats.collisionTests;case 6:return result.stats.completedFrames;
     case 7:return double(decisions);case 8:return g_GameManager.currentStage;case 9:return result.safeFrames;
+    case 19:return active&&autoBomb&&result.pressure.valid?result.pressure.score:-1;
+    case 20:return bombDecision.highFrames();
+    case 21:return bombDecision.pending()?bombDecision.remainingFrames():-1;
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
     case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);

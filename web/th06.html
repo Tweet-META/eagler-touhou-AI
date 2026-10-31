@@ -20,6 +20,11 @@ input:disabled{opacity:.45;cursor:not-allowed}
 <label>弹幕密度惩罚 <span id="nv">0.1</span><input id="densityPenalty" type="range" min="0" max="2" step="0.01" value="0.1"></label>
 <p class="hint">密度统计附近 32 像素内敌弹，越近贡献越大，最多累计 8。权重 0 关闭此项；激光和敌机仍避让，但不计入弹幕密度。</p>
 <p class="hint">危险距离惩罚默认 10，越高越倾向远离子弹；0 只关闭距离扣分，预测碰撞仍会剪枝。</p>
+<label><input id="autoBomb" type="checkbox" checked> AI 主动放雷</label>
+<label>放雷压力阈值 <span id="btv">0.60</span><input id="bombThreshold" type="range" min="0" max="1" step="0.01" value="0.6"></label>
+<label>压力确认时间 <span id="bcv">0.10</span> 秒<input id="bombConfirm" type="range" min="0" max="1" step="0.05" value="0.1"></label>
+<label>放雷延迟 <span id="bdv">0.20</span> 秒<input id="bombDelay" type="range" min="0" max="1" step="0.05" value="0.2"></label>
+<p class="hint">阈值越低越舍得交雷。压力持续达到确认时间后才决定，再等待放雷延迟；期间继续避弹，不因压力短暂下降取消，也不会自动决死或跳过延迟。死亡、对话、关卡切换或获得保护时取消；暂停冻结计时，调整放雷参数重新判断。</p>
 <pre id="stats">加载游戏…</pre>
 <p class="hint">方向键移动 P1，Z 射击、Shift 低速、X 放雷，Esc 暂停。默认 P2 为 AI，使用另一位角色的 A 装备。AI 开关只影响 P2，你始终控制 P1；菜单与对话由你操作。</p>
 <p class="hint">THPrac 已启用：从主菜单 Practice 选择机体后进入练习设置。F12 打开高级选项，Backspace 打开功能菜单，Tab 切换统计面板。练习／高级菜单打开时 AI 交还控制，关闭后恢复。</p>
@@ -39,6 +44,13 @@ function syncTeamControls(){
   $('av').textContent=$('attack').value;$('ewv').textContent=$('edgeWeight').value;
 }
 function focus(){const win=$('game').contentWindow;win.focus();win.document.getElementById('canvas')?.focus();}
+function configureBomb(){
+  $('btv').textContent=(+$('bombThreshold').value).toFixed(2);
+  $('bcv').textContent=(+$('bombConfirm').value).toFixed(2);
+  $('bdv').textContent=(+$('bombDelay').value).toFixed(2);
+  core?._th06_ai_bomb_config(+$('autoBomb').checked,+$('bombThreshold').value,
+    Math.round(+$('bombConfirm').value*60),Math.round(+$('bombDelay').value*60));
+}
 function configure(){syncTeamControls();if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,+$('attack').value);core._th06_ai_edges(+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
 $('horizon').oninput=$('beam').oninput=configure;
@@ -47,13 +59,18 @@ $('danger').oninput=configure;
 $('densityPenalty').oninput=configure;
 $('edgeWeight').oninput=$('edgeDistance').oninput=configure;
 $('teamMode').onchange=()=>{core?._th06_ai_team_mode(+$('teamMode').value);configure();focus();};
+$('autoBomb').onchange=configureBomb;
+$('bombThreshold').oninput=$('bombConfirm').oninput=$('bombDelay').oninput=configureBomb;
 syncTeamControls();
+configureBomb();
 setInterval(()=>{
   try{
     const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('stats').textContent='正在加载红魔乡资源…';return;}
-    if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();}
+    if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();configureBomb();}
     const get=i=>core._th06_ai_metric(i);enabled=!!get(0);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;
     $('stats').textContent=`${get(1)?'P2 AI 正在行动':'P2 AI 等待／停止行动'}\n本地席位 ${get(10)} · Boss伤害倍率 ${get(11).toFixed(2)}\n你：残机 ${get(12)} · 雷 ${get(17)} · 灵力 ${get(14)}\nAI：残机 ${get(13)} · 雷 ${get(18)} · 灵力 ${get(15)}\n读取危险物 ${get(4)}\n采集 + 搜索 ${get(2).toFixed(2)} ms\n精细判定 ${get(5)}\n搜索完成 ${get(6)} 帧\n安全前缀 ${get(9)} 帧\n决策次数 ${get(7)}\n状态位 ${get(3)}`;
+    const pressure=get(19),remaining=get(21);
+    $('stats').textContent+=`\n避弹压力 ${pressure<0?'暂无可靠结果':pressure.toFixed(2)}\n主动放雷 ${!$('autoBomb').checked?'已关闭':remaining>=0?`已决定，${(remaining/60).toFixed(2)} 秒后执行`:`确认 ${(get(20)/60).toFixed(2)} 秒`}`;
   }catch(error){$('stats').textContent=error.message;}
 },250);
 </script></html>
