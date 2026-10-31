@@ -3,10 +3,11 @@
 *{box-sizing:border-box}body{margin:0;background:#10151c;color:#e5e9ef;font:15px/1.6 system-ui}main{max-width:1150px;margin:20px auto;padding:0 16px}h1{font-size:24px}section{display:grid;grid-template-columns:minmax(0,800px) minmax(240px,1fr);gap:20px;align-items:start}iframe{display:block;box-sizing:content-box;width:100%;height:auto;aspect-ratio:4/3;border:0;outline:1px solid #53687b;background:black;max-width:calc((100vh - 110px)*4/3);max-width:calc((100dvh - 110px)*4/3)}aside{min-width:0;overflow-wrap:anywhere}label{display:block;margin:16px 0}input[type=range]{display:block;width:100%}button{padding:8px 16px;background:#243443;border:1px solid #53687b;border-radius:5px;color:white;cursor:pointer}pre{white-space:pre-wrap;color:#a6d8c5}a{color:#91c9fc}.hint{color:#a8b7c9;font-size:14px}
 @media(max-width:900px){section{grid-template-columns:minmax(0,1fr)}iframe{justify-self:center;max-width:min(800px,calc((100vh - 110px)*4/3));max-width:min(800px,calc((100dvh - 110px)*4/3))}}
 select{font:inherit;color:inherit;background:#243443;border:1px solid #53687b;border-radius:5px;padding:5px 8px}
+input:disabled{opacity:.45;cursor:not-allowed}
 </style><main><h1>红魔乡 · 你 + AI 本地合作</h1><section><iframe id="game" src="./th06-runtime/th06.html" allow="autoplay; fullscreen; gamepad" title="红魔乡本地合作"></iframe><aside>
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
-<p class="hint">跟随：尽量在你附近行动。分别压制：道中去你所在位置的另一侧，Boss 战自由避弹与输出。避弹优先，收点和输出仍参与评分。</p>
+<p class="hint">跟随：尽量靠近你半秒前的位置，输出站位与边缘惩罚锁定为 0。分别压制：道中去你所在位置的另一侧，Boss 战自由避弹与输出，并恢复这两项权重。避弹优先，收点仍参与评分。</p>
 <label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
 <label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
@@ -26,15 +27,27 @@ select{font:inherit;color:inherit;background:#243443;border:1px solid #53687b;bo
 <a href="./">返回合成弹幕演示</a>
 </aside></section></main><script type="module">
 const $=id=>document.getElementById(id);let enabled=true,core=null;
+const splitWeights={attack:$('attack').value,edgeWeight:$('edgeWeight').value};
+function syncTeamControls(){
+  const following=$('teamMode').value==='0';
+  for(const id of ['attack','edgeWeight']){
+    const slider=$(id);
+    if(following){if(!slider.disabled)splitWeights[id]=slider.value;slider.value='0';}
+    else if(slider.disabled)slider.value=splitWeights[id];
+    slider.disabled=following;
+  }
+  $('av').textContent=$('attack').value;$('ewv').textContent=$('edgeWeight').value;
+}
 function focus(){const win=$('game').contentWindow;win.focus();win.document.getElementById('canvas')?.focus();}
-function configure(){if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,+$('attack').value);core._th06_ai_edges(+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
+function configure(){syncTeamControls();if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,+$('attack').value);core._th06_ai_edges(+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
 $('horizon').oninput=$('beam').oninput=configure;
 $('pickup').oninput=$('attack').oninput=configure;
 $('danger').oninput=configure;
 $('densityPenalty').oninput=configure;
 $('edgeWeight').oninput=$('edgeDistance').oninput=configure;
-$('teamMode').onchange=()=>{core?._th06_ai_team_mode(+$('teamMode').value);focus();};
+$('teamMode').onchange=()=>{core?._th06_ai_team_mode(+$('teamMode').value);configure();focus();};
+syncTeamControls();
 setInterval(()=>{
   try{
     const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('stats').textContent='正在加载红魔乡资源…';return;}

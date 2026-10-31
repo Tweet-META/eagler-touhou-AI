@@ -44,6 +44,42 @@ std::uint64_t decisions=0;
 int active=0;
 bool ownsInputs=false;
 int teamMode=0,splitSide=0; // 0 follows P1; 1 covers the opposite side on stage.
+float splitAttackWeight=.2f,splitEdgeWeight=1.f;
+struct FollowHistory {
+    std::array<Vec2,31> positions{}; // Current sample plus 30 logical ticks.
+    std::size_t next=0,count=0;
+    u32 frame=std::numeric_limits<u32>::max(),stage=0;
+    void reset(){next=count=0;frame=std::numeric_limits<u32>::max();stage=0;}
+    void sample(Vec2 pos,u32 now,u32 currentStage){
+        if(count&&(currentStage!=stage||now<frame))reset();
+        if(count&&now==frame)return;
+        positions[next]=pos;next=(next+1)%positions.size();
+        count=std::min(count+1,positions.size());frame=now;stage=currentStage;
+    }
+    Vec2 delayed() const {return positions[count==positions.size()?next:0];}
+} followHistory;
+void applyTeamWeights(){
+    auto s=planner.settings();s.attackWeight=teamMode==0?0:splitAttackWeight;
+    s.edgeWeight=teamMode==0?0:splitEdgeWeight;planner.configure(s);
+    lastFrame=std::numeric_limits<u32>::max();
+}
+void sampleTeammate(){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    const auto& human=g_Players[0];
+    if(!MultiplayerGameplay::IsPlayerActive(0)||!human.chainCalc||
+       (human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE)){
+        followHistory.reset();return;
+    }
+    if(g_Supervisor.curState!=SUPERVISOR_STATE_GAMEMANAGER||g_GameManager.isInGameMenu||
+       g_GameManager.isInRetryMenu||g_GameManager.isGameCompleted||g_GameManager.isTimeStopped||
+       g_Gui.HasCurrentMsgIdx())return;
+#ifdef TH_ENABLE_THPRAC
+    if(PracticeRuntime::CapturesGameInput())return;
+#endif
+    followHistory.sample({human.positionCenter.x,human.positionCenter.y},
+                         g_GameManager.gameFrames,u32(g_GameManager.currentStage));
+#endif
+}
 ::Player& controlledPlayer(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     return g_Players[1];
@@ -58,9 +94,11 @@ void formation(World& w){
     if(!MultiplayerGameplay::IsMultiplayer()||!MultiplayerGameplay::IsPlayerActive(0)||!human.chainCalc||
        (human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE))return;
     if(teamMode==0){
-        w.formationGoal={std::clamp(human.positionCenter.x,w.bounds.left,w.bounds.right),
-                         std::clamp(human.positionCenter.y,w.bounds.top,w.bounds.bottom)};
-        w.formationWeight={.025f,.025f};w.formationSlack={24,24};
+        if(!followHistory.count)return;
+        const auto delayed=followHistory.delayed();
+        w.formationGoal={std::clamp(delayed.x,w.bounds.left,w.bounds.right),
+                         std::clamp(delayed.y,w.bounds.top,w.bounds.bottom)};
+        w.formationWeight={.035f,.035f};w.formationSlack={24,24};
     }else if(!g_Gui.BossPresent()){
         const float middle=(w.bounds.left+w.bounds.right)*.5f;
         // Keep the assigned side while P1 crosses the centre's 32 px band.
@@ -220,7 +258,7 @@ void Th06Ai::configureSession(){
     session.players[0].character=g_GameManager.character;session.players[0].shot=g_GameManager.shotType;
     session.players[1].character=g_GameManager.character==0?1:0;session.players[1].shot=0;
     MultiplayerGameplay::Configure(session);
-    splitSide=0;
+    splitSide=0;followHistory.reset();applyTeamWeights();
     planner.reset();lastFrame=std::numeric_limits<u32>::max();
 #endif
 }
@@ -228,12 +266,14 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     if(g_GameManager.isInReplay||g_GameManager.demoMode){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
-        active=0;return;
+        followHistory.reset();active=0;return;
     }
     if(!MultiplayerGameplay::IsMultiplayer()){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
+        followHistory.reset();
         return;
     }
+    sampleTeammate();
     std::array<std::uint16_t,TH06_MULTI_MAX_PLAYERS> inputs{};
     inputs[0]=humanInput;inputs[1]=filter(0);
     Netplay::Input::SetPlayerButtonOverrides(inputs.data(),inputs.size());ownsInputs=true;
@@ -246,13 +286,15 @@ AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();lastFr
 AI_EXPORT void th06_ai_team_mode(int mode){
     if(mode<0||mode>1)return;
     teamMode=mode;splitSide=0;planner.reset();lastFrame=std::numeric_limits<u32>::max();
+    applyTeamWeights();
 }
 AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
     auto s=planner.settings();s.horizon=horizon;s.beamWidth=beam;s.maxHazards=4096;
     s.maxCollisionTests=std::uint32_t(std::max(1,budget));planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_objectives(float pickup,float attack){
-    auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=attack;
+    splitAttackWeight=attack;
+    auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=teamMode==0?0:attack;
     planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_danger(float weight){
@@ -260,7 +302,8 @@ AI_EXPORT void th06_ai_danger(float weight){
     lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_edges(float weight,float distance){
-    auto s=planner.settings();s.edgeWeight=weight;s.edgeDistance=distance;planner.configure(s);
+    splitEdgeWeight=weight;
+    auto s=planner.settings();s.edgeWeight=teamMode==0?0:weight;s.edgeDistance=distance;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_density(float weight){
