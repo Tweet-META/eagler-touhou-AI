@@ -7,14 +7,14 @@ input:disabled{opacity:.45;cursor:not-allowed}
 details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}summary{cursor:pointer;color:#a8b7c9}details:not([open])>summary{margin:0}[hidden]{display:none!important}
 </style><main><h1>红魔乡 · 你 + AI 本地合作</h1><section><iframe id="game" src="./th06-runtime/th06.html" allow="autoplay; fullscreen; gamepad" title="红魔乡本地合作"></iframe><aside>
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
-<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="capable">有点强（H混关实力）</option><option value="clumsy">不太聪明的ai</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
+<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="capable">有点强（H混关实力）</option><option value="clumsy">有点弱的ai</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
 <p id="customStrength" class="hint" hidden>实力已由高级参数自定义；重新选择档位可恢复预设。</p>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
 <p class="hint">跟随队友：尽量跟着你行动。分别压制：道中与你分居左右，Boss 战自由避弹与输出。</p>
 <p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
 <pre id="status" role="status">加载游戏…</pre>
 <details id="advanced"><summary>高级选项</summary>
-<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强与不太聪明的ai：6 帧预判、2 条路线、输入延迟 1 帧，动作分别持续 3 帧与 6 帧。其他参数不随档位改变。</p>
+<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。有点弱的ai：6 帧预判、2 条路线、动作 6 帧、输入延迟 2 帧。其他参数不随档位改变。</p>
 <p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
@@ -45,7 +45,7 @@ const strengths={
   strong:{horizon:6,beam:2,actionDuration:1,inputDelay:0},
   stronger:{horizon:12,beam:8,actionDuration:1,inputDelay:0},
   capable:{horizon:6,beam:2,actionDuration:3,inputDelay:1},
-  clumsy:{horizon:6,beam:2,actionDuration:6,inputDelay:1},
+  clumsy:{horizon:6,beam:2,actionDuration:6,inputDelay:2},
 };
 function syncStrength(){
   const match=Object.entries(strengths).find(([,preset])=>Object.entries(preset).every(([id,value])=>+$(id).value===value));
