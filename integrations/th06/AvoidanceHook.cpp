@@ -152,7 +152,7 @@ std::uint16_t deliverInput(std::uint16_t wanted){
     if(!bombAllowed){inputImpairment.cancelButtons(TH_BUTTON_BOMB);wanted&=~TH_BUTTON_BOMB;}
     if(!inputTickValid||frame!=inputTickFrame){
         inputTickValid=true;inputTickFrame=frame;inputTickStage=stage;
-        deliveredInput=inputImpairment.tick(wanted);
+        deliveredInput=inputImpairment.tick(wanted,TH_BUTTON_BOMB);
     }
     // A delayed bomb never survives death/protection or becomes a deathbomb.
     if(!bombAllowed)deliveredInput&=~TH_BUTTON_BOMB;

@@ -20,7 +20,7 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
 <label>AI 输入延迟 <span id="idv">0.00 秒（0 帧）</span><input id="inputDelay" type="range" min="0" max="30" step="1" value="0"></label>
 <label>AI 输入失败率 <span id="ifv">0</span>%<input id="inputFailure" type="range" min="0" max="100" step="1" value="0"></label>
-<p class="hint">每次新按下一个键时判断是否失败；失败后直到 AI 松开再按才重试，长按途中不反复抽签。方向、低速、射击和放雷都生效；输入延迟会额外叠加到放雷延迟上。默认均为 0，暂停、死亡或切换关卡会清空排队输入。</p>
+<p class="hint">按键失败后，AI 发现没按上会在约 0.1 秒后重按，每次重试仍可能失败；输入延迟另计。长按成功后不会中途掉键，改变方向后取消旧方向重试。放雷失败也会重试，但死亡或获得保护后取消，不补决死。默认均为 0，暂停、死亡或切换关卡会清空排队输入。</p>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
 <p class="hint">只主动追下半屏道具，上半屏道具落下来后再收。</p>
 <label>输出站位权重 <span id="av">0.2</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.2"></label>
