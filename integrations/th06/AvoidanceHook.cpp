@@ -43,6 +43,7 @@ double elapsedMs=0;
 std::uint64_t decisions=0;
 int active=0;
 bool ownsInputs=false;
+int teamMode=0,splitSide=0; // 0 follows P1; 1 covers the opposite side on stage.
 ::Player& controlledPlayer(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     return g_Players[1];
@@ -51,6 +52,28 @@ bool ownsInputs=false;
 #endif
 }
 void add(const Hazard& h){if(count<hazards.size())hazards[count++]=h;else overflow=true;}
+void formation(World& w){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    const auto& human=g_Players[0];
+    if(!MultiplayerGameplay::IsMultiplayer()||!MultiplayerGameplay::IsPlayerActive(0)||!human.chainCalc||
+       (human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE))return;
+    if(teamMode==0){
+        w.formationGoal={std::clamp(human.positionCenter.x,w.bounds.left,w.bounds.right),
+                         std::clamp(human.positionCenter.y,w.bounds.top,w.bounds.bottom)};
+        w.formationWeight={.025f,.025f};w.formationSlack={24,24};
+    }else if(!g_Gui.BossPresent()){
+        const float middle=(w.bounds.left+w.bounds.right)*.5f;
+        // Keep the assigned side while P1 crosses the centre's 32 px band.
+        if(human.positionCenter.x<middle-16)splitSide=1;
+        else if(human.positionCenter.x>middle+16)splitSide=-1;
+        else if(!splitSide)splitSide=w.player.position.x>=middle?1:-1;
+        w.formationGoal={middle+splitSide*(w.bounds.right-w.bounds.left)*.25f,w.player.position.y};
+        w.formationWeight={.025f,0};w.formationSlack={24,0};
+    }
+#else
+    (void)w;
+#endif
+}
 void lasers(float scale,int horizon){
     for(const auto& laser:g_BulletManager.lasers){
         if(!laser.inUse)continue;
@@ -132,6 +155,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
         gm.playerMovementAreaTopLeftPos.x+gm.playerMovementAreaSize.x,
         gm.playerMovementAreaTopLeftPos.y+gm.playerMovementAreaSize.y};
     w.goal={(w.bounds.left+w.bounds.right)*.5f,w.bounds.bottom-64};
+    formation(w);
     // Rank once per tick rather than inspect every item inside every route.
     std::array<std::pair<float,Pickup>,513> rankedItems{};std::size_t itemCount=0;
     for(const auto& item:g_ItemManager.items){
@@ -196,6 +220,7 @@ void Th06Ai::configureSession(){
     session.players[0].character=g_GameManager.character;session.players[0].shot=g_GameManager.shotType;
     session.players[1].character=g_GameManager.character==0?1:0;session.players[1].shot=0;
     MultiplayerGameplay::Configure(session);
+    splitSide=0;
     planner.reset();lastFrame=std::numeric_limits<u32>::max();
 #endif
 }
@@ -218,6 +243,10 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 }
 extern "C" {
 AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();lastFrame=std::numeric_limits<u32>::max();}
+AI_EXPORT void th06_ai_team_mode(int mode){
+    if(mode<0||mode>1)return;
+    teamMode=mode;splitSide=0;planner.reset();lastFrame=std::numeric_limits<u32>::max();
+}
 AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
     auto s=planner.settings();s.horizon=horizon;s.beamWidth=beam;s.maxHazards=4096;
     s.maxCollisionTests=std::uint32_t(std::max(1,budget));planner.configure(s);lastFrame=std::numeric_limits<u32>::max();

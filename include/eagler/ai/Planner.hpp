@@ -49,6 +49,9 @@ struct World {
     bool active=true;
     // The producer sets this when it cannot describe the full danger field.
     bool incomplete=false;
+    // Optional team positioning, independent of pickup/attack objectives.
+    // Zero axis weights disable it; slack avoids chasing an exact pixel.
+    Vec2 formationGoal{}, formationWeight{}, formationSlack{};
 };
 struct Settings {
     int horizon=12, beamWidth=8, actionFrames=3;

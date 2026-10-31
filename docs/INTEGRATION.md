@@ -84,6 +84,8 @@ TH12 适配时应使用核心 `GameState` / `LaserWorld` 的有效判定状态�
 
 ## C++ 与打包
 
+C++ `World` 还可提交 `formationGoal`、`formationWeight` 与 `formationSlack`，按轴计算 `weight × max(0, abs(position-goal)-slack)` 的队形代价，独立于收点／输出。权重默认 0，保持现有调用行为；启用时取消闲置回中心目标。TH06 本地双人接入用它实现跟随及道中分边，通用浏览器 ABI 保持 3，尚不提供这些字段的 JS 接口。
+
 ```cmake
 add_subdirectory(/path/to/eagler-touhou-ai ai)
 target_link_libraries(your_title PRIVATE eagler::ai)

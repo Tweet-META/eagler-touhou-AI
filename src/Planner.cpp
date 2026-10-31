@@ -161,6 +161,8 @@ Result Planner::decide(const World& w){
     if(!finite(p.position)||!finite(p.radius)||p.radius<0||!finite(p.fastSpeed)||p.fastSpeed<0||
        !finite(p.slowSpeed)||p.slowSpeed<0||!finite(w.goal)||!finite(b.left)||!finite(b.top)||
        !finite(b.right)||!finite(b.bottom)||b.left>b.right||b.top>b.bottom||
+       !finite(w.formationGoal)||!finite(w.formationWeight)||!finite(w.formationSlack)||
+       w.formationWeight.x<0||w.formationWeight.y<0||w.formationSlack.x<0||w.formationSlack.y<0||
        p.position.x<b.left||p.position.x>b.right||p.position.y<b.top||p.position.y>b.bottom||
        (w.hazardCount&&!w.hazards)||(w.pickupCount&&!w.pickups)||(w.targetCount&&!w.targets)){
         result.flags=InvalidWorld;previous_=0;return result;
@@ -169,7 +171,7 @@ Result Planner::decide(const World& w){
     const auto pickupCount=std::min<std::size_t>(w.pickupCount,MaxPickups);
     const auto targetCount=std::min<std::size_t>(w.targetCount,MaxTargets);
     const bool objectives=(pickupCount&&(c.pickupWeight>0||c.pickupApproachWeight>0))||
-        (targetCount&&c.fire&&c.attackWeight>0);
+        (targetCount&&c.fire&&c.attackWeight>0)||w.formationWeight.x>0||w.formationWeight.y>0;
     const auto attackScore=[&](Vec2 pos,int time){
         float best=-std::numeric_limits<float>::infinity();
         if(c.fire)for(std::size_t j=0;j<targetCount;++j){
@@ -251,6 +253,8 @@ Result Planner::decide(const World& w){
                     r.cost+=c.densityWeight*density;
                     // The idle goal must not pull against collection/attack.
                     if(!objectives)r.cost+=c.goalWeight*(std::abs(to.x-w.goal.x)+std::abs(to.y-w.goal.y));
+                    r.cost+=w.formationWeight.x*std::max(0.f,std::abs(to.x-w.formationGoal.x)-w.formationSlack.x)
+                           +w.formationWeight.y*std::max(0.f,std::abs(to.y-w.formationGoal.y)-w.formationSlack.y);
                     r.cost+=c.edgeWeight*edgeCost(to,b,c.edgeDistance);
                     r.cost+=c.movementWeight*(std::abs(to.x-r.p.x)+std::abs(to.y-r.p.y));
                     r.cost+=c.pickupApproachWeight*(itemPotential(r.p,elapsed+f-1,r.collected)-itemPotential(to,elapsed+f,r.collected));
