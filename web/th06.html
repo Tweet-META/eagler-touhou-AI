@@ -7,18 +7,18 @@ input:disabled{opacity:.45;cursor:not-allowed}
 details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}summary{cursor:pointer;color:#a8b7c9}details:not([open])>summary{margin:0}[hidden]{display:none!important}
 </style><main><h1>红魔乡 · 你 + AI 本地合作</h1><section><iframe id="game" src="./th06-runtime/th06.html" allow="autoplay; fullscreen; gamepad" title="红魔乡本地合作"></iframe><aside>
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
-<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
+<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="capable">有点强（H混关实力）</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
 <p id="customStrength" class="hint" hidden>实力已由高级参数自定义；重新选择档位可恢复预设。</p>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
 <p class="hint">跟随队友：尽量跟着你行动。分别压制：道中与你分居左右，Boss 战自由避弹与输出。</p>
 <p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
 <pre id="status" role="status">加载游戏…</pre>
 <details id="advanced"><summary>高级选项</summary>
-<p class="hint">强强：6 帧、2 条路线；这么强？！：12 帧、8 条路线。下方可手动覆盖，其他参数不随档位改变。</p>
+<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧。两档放雷阈值 0.60。有点强：6 帧预判、2 条路线、动作 3 帧、放雷阈值 0.55。其他参数不随档位改变。</p>
 <p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
-<label>AI 动作持续时间 <span id="adv">0.05 秒（3 帧）</span><input id="actionDuration" type="range" min="1" max="12" step="1" value="3"></label>
+<label>AI 动作持续时间 <span id="adv">0.02 秒（1 帧）</span><input id="actionDuration" type="range" min="1" max="12" step="1" value="1"></label>
 <p class="hint">选定方向（包括停留）和高低速后，在持续时间内保持不变，搜索也按相同长度展开。超过预判帧数时，搜索会延长到至少覆盖完整动作。射击和放雷独立处理；暂停、死亡会立即停止。</p>
 <label>AI 输入延迟 <span id="idv">0.00 秒（0 帧）</span><input id="inputDelay" type="range" min="0" max="30" step="1" value="0"></label>
 <p class="hint">AI 按键整体延后生效，输入延迟会叠加到放雷延迟上。默认 0；暂停、死亡或切换关卡会清空排队输入。</p>
@@ -44,9 +44,13 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <a href="./">返回合成弹幕演示</a>
 </aside></section></main><script type="module">
 const $=id=>document.getElementById(id);let enabled=true,core=null;
-const strengths={strong:{horizon:6,beam:2},stronger:{horizon:12,beam:8}};
+const strengths={
+  strong:{horizon:6,beam:2,actionDuration:1,bombThreshold:.60},
+  stronger:{horizon:12,beam:8,actionDuration:1,bombThreshold:.60},
+  capable:{horizon:6,beam:2,actionDuration:3,bombThreshold:.55},
+};
 function syncStrength(){
-  const match=Object.entries(strengths).find(([,preset])=>preset.horizon===+$('horizon').value&&preset.beam===+$('beam').value);
+  const match=Object.entries(strengths).find(([,preset])=>Object.entries(preset).every(([id,value])=>+$(id).value===value));
   $('strength').value=match?match[0]:'custom';
   $('customStrength').hidden=!!match;
 }
@@ -63,6 +67,7 @@ function syncTeamControls(){
 }
 function focus(){const win=$('game').contentWindow;win.focus();win.document.getElementById('canvas')?.focus();}
 function configureAction(){
+  syncStrength();
   const frames=+$('actionDuration').value;
   $('adv').textContent=`${(frames/60).toFixed(2)} 秒（${frames} 帧）`;
   core?._th06_ai_action_duration(frames);
@@ -73,6 +78,7 @@ function configureInput(){
   core?._th06_ai_input_delay(frames);
 }
 function configureBomb(){
+  syncStrength();
   $('btv').textContent=(+$('bombThreshold').value).toFixed(2);
   $('bcv').textContent=(+$('bombConfirm').value).toFixed(2);
   $('bdv').textContent=(+$('bombDelay').value).toFixed(2);
@@ -82,7 +88,11 @@ function configureBomb(){
 function configure(){syncStrength();syncTeamControls();$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,$('attack').disabled?+splitWeights.attack:+$('attack').value);core._th06_ai_edges($('edgeWeight').disabled?+splitWeights.edgeWeight:+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
 $('horizon').oninput=$('beam').oninput=configure;
-$('strength').onchange=()=>{const preset=strengths[$('strength').value];$('horizon').value=preset.horizon;$('beam').value=preset.beam;configure();focus();};
+$('strength').onchange=()=>{
+  const preset=strengths[$('strength').value];
+  for(const [id,value] of Object.entries(preset))$(id).value=value;
+  configure();configureAction();configureBomb();focus();
+};
 $('pickup').oninput=$('attack').oninput=configure;
 $('danger').oninput=configure;
 $('densityPenalty').oninput=configure;
