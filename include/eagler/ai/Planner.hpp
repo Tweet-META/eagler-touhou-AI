@@ -53,6 +53,7 @@ struct World {
     // Zero axis weights disable it; slack avoids chasing an exact pixel.
     Vec2 formationGoal{}, formationWeight{}, formationSlack{};
     bool measurePressure=false;
+    int requiredFirstFocus=-1; // -1 free, 0 released, 1 pressed; first tick only.
 };
 struct Settings {
     int horizon=12, beamWidth=8, actionFrames=3;

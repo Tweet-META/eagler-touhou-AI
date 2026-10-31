@@ -95,7 +95,7 @@ float edgeCost(Vec2 p,Bounds b,float range){
 
 Planner::Planner(Settings settings){
     entries_.reserve(MaxHazards);order_.reserve(MaxHazards);tree_.reserve(MaxHazards*2);
-    beam_.reserve(MaxBeam);next_.reserve(MaxBeam);candidates_.reserve(MaxBeam*17);
+    beam_.reserve(MaxBeam);next_.reserve(MaxBeam);candidates_.reserve(MaxBeam*18);
     configure(settings);
 }
 void Planner::configure(Settings s){
@@ -163,6 +163,7 @@ Result Planner::decide(const World& w){
        !finite(b.right)||!finite(b.bottom)||b.left>b.right||b.top>b.bottom||
        !finite(w.formationGoal)||!finite(w.formationWeight)||!finite(w.formationSlack)||
        w.formationWeight.x<0||w.formationWeight.y<0||w.formationSlack.x<0||w.formationSlack.y<0||
+       w.requiredFirstFocus<-1||w.requiredFirstFocus>1||
        p.position.x<b.left||p.position.x>b.right||p.position.y<b.top||p.position.y>b.bottom||
        (w.hazardCount&&!w.hazards)||(w.pickupCount&&!w.pickups)||(w.targetCount&&!w.targets)){
         result.flags=InvalidWorld;previous_=0;return result;
@@ -226,18 +227,20 @@ Result Planner::decide(const World& w){
     order_.resize(entries_.size());std::iota(order_.begin(),order_.end(),0);
     if(!entries_.empty())build(0,int(entries_.size()));
     constexpr std::uint32_t dirs[]{0,Left,Right,Up,Down,Left|Up,Right|Up,Left|Down,Right|Down};
-    std::array<std::uint32_t,17> actions{};int actionCount=0;
+    std::array<std::uint32_t,18> actions{};int actionCount=0;
     for(auto d:dirs)actions[actionCount++]=Focus|d;
     if(c.allowFast)for(int i=1;i<9;++i)actions[actionCount++]=dirs[i];
+    if(w.requiredFirstFocus==0)actions[actionCount++]=0; // Unfocused stationary rescue tap release.
     const auto previous=std::find(actions.begin(),actions.begin()+actionCount,previous_);
     if(previous!=actions.begin()+actionCount)std::rotate(actions.begin(),previous,previous+1);
     beam_.clear();Route initial;initial.p=initial.firstPosition=p.position;initial.last=previous_;initial.margin=c.proximityRange;beam_.push_back(initial);
     Route fallback=beam_.front();int fallbackTime=0;bool exhausted=false;
     for(int elapsed=0;elapsed<c.horizon;){
-        candidates_.clear();const int span=std::min(c.actionFrames,c.horizon-elapsed);
+        candidates_.clear();const int span=std::min(!elapsed&&w.requiredFirstFocus>=0?1:c.actionFrames,c.horizon-elapsed);
         for(const auto& parent:beam_){
             for(int ai=0;ai<actionCount;++ai){
                 Route r=parent;const auto action=actions[ai];r.ordinal=++result.stats.expanded;
+                if(!elapsed&&w.requiredFirstFocus>=0&&bool(action&Focus)!=(w.requiredFirstFocus!=0))continue;
                 if(action!=r.last)r.cost+=c.switchWeight;
                 r.last=action;if(!elapsed)r.first=action;
                 const Vec2 move=mul(direction(action),action&Focus?p.slowSpeed:p.fastSpeed);

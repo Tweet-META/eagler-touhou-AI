@@ -52,6 +52,25 @@ bool ownsInputs=false;
 int teamMode=0,splitSide=0; // 0 follows P1; 1 covers the opposite side on stage.
 float splitAttackWeight=.2f,splitEdgeWeight=1.f;
 const float splitMovementWeight=planner.settings().movementWeight;
+bool humanUnavailable(){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    const auto& human=g_Players[0];
+    return human.chainCalc&&human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE;
+#else
+    return false;
+#endif
+}
+bool rescueWanted(){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    const auto& ai=g_Players[1];
+    return MultiplayerGameplay::IsMultiplayer()&&MultiplayerGameplay::IsPlayerActive(0)&&
+        g_Players[0].chainCalc&&g_Players[0].playerState==PLAYER_STATE_REVIVABLE&&GetPlayerLives(1)>0&&
+        ai.chainCalc&&(ai.playerState==PLAYER_STATE_ALIVE||ai.playerState==PLAYER_STATE_INVULNERABLE);
+#else
+    return false;
+#endif
+}
+bool teamWeightsLocked(){return rescueWanted()||(teamMode==0&&!humanUnavailable());}
 struct FollowHistory {
     std::array<Vec2,19> positions{}; // Current sample plus 18 logical ticks (0.3 s).
     std::size_t next=0,count=0;
@@ -66,9 +85,10 @@ struct FollowHistory {
     Vec2 delayed() const {return positions[count==positions.size()?next:0];}
 } followHistory;
 void applyTeamWeights(){
-    auto s=planner.settings();s.attackWeight=teamMode==0?0:splitAttackWeight;
-    s.edgeWeight=teamMode==0?0:splitEdgeWeight;
-    s.movementWeight=teamMode==0?0:splitMovementWeight;planner.configure(s);
+    const bool locked=teamWeightsLocked();auto s=planner.settings();
+    const float attack=locked?0:splitAttackWeight,edge=locked?0:splitEdgeWeight,movement=locked?0:splitMovementWeight;
+    if(s.attackWeight==attack&&s.edgeWeight==edge&&s.movementWeight==movement)return;
+    s.attackWeight=attack;s.edgeWeight=edge;s.movementWeight=movement;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
 void sampleTeammate(){
@@ -120,6 +140,16 @@ void add(const Hazard& h){if(count<hazards.size())hazards[count++]=h;else overfl
 void formation(World& w){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     const auto& human=g_Players[0];
+    if(rescueWanted()){
+        // Approach the drifting ghost using normal movement and collision search.
+        w.formationGoal={std::clamp(human.positionCenter.x,w.bounds.left,w.bounds.right),
+                         std::clamp(human.positionCenter.y,w.bounds.top,w.bounds.bottom)};
+        w.formationWeight={.08f,.08f};w.formationSlack={3,3};
+        const float dx=w.player.position.x-human.positionCenter.x,dy=w.player.position.y-human.positionCenter.y;
+        if(dx*dx+dy*dy<=18.f*18.f)
+            w.requiredFirstFocus=(g_GameManager.gameFrames%4)<2?1:0;
+        return;
+    }
     if(!MultiplayerGameplay::IsMultiplayer()||!MultiplayerGameplay::IsPlayerActive(0)||!human.chainCalc||
        (human.playerState!=PLAYER_STATE_ALIVE&&human.playerState!=PLAYER_STATE_INVULNERABLE))return;
     if(teamMode==0){
@@ -208,6 +238,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     active=active&&!PracticeRuntime::CapturesGameInput();
 #endif
     if(!active){if(wasActive)planner.reset();wasActive=false;lastFrame=std::numeric_limits<u32>::max();return input;}
+    applyTeamWeights();
     if(!wasActive||g_GameManager.currentStage!=int(lastStage)||g_GameManager.gameFrames<lastFrame)planner.reset();
     wasActive=true;
     constexpr std::uint16_t owned=TH_BUTTON_DIRECTION|TH_BUTTON_FOCUS|TH_BUTTON_SHOOT|TH_BUTTON_BOMB;
@@ -258,6 +289,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     }
     std::sort(rankedItems.begin(),rankedItems.begin()+itemCount,[](const auto& a,const auto& b){return a.first<b.first;});
     w.pickupCount=std::min(itemCount,pickups.size());
+    if(rescueWanted())w.pickupCount=0;
     for(std::size_t j=0;j<w.pickupCount;++j)pickups[j]=rankedItems[j].second;
     w.pickups=pickups.data();
     std::array<std::pair<float,AttackTarget>,257> rankedTargets{};std::size_t enemyCount=0;
@@ -272,6 +304,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     }
     std::sort(rankedTargets.begin(),rankedTargets.begin()+enemyCount,[](const auto& a,const auto& b){return a.first<b.first;});
     w.targetCount=std::min(enemyCount,targets.size());
+    if(rescueWanted())w.targetCount=0;
     for(std::size_t j=0;j<w.targetCount;++j)targets[j]=rankedTargets[j].second;
     w.targets=targets.data();
     for(const auto& bullet:g_BulletManager.bullets){
@@ -294,6 +327,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     elapsedMs=1000.*double(SDL_GetPerformanceCounter()-begin)/double(SDL_GetPerformanceFrequency());
     if(result.flags&(IncompleteWorld|InvalidWorld)){resetBomb();cached=input&owned;return input;}
     cached=map(result.buttons);
+    if(rescueWanted())cached&=~TH_BUTTON_SHOOT; // Native life-transfer gesture requires no shooting.
     if(updateBomb())cached|=TH_BUTTON_BOMB;
     return apply(cached);
 }
@@ -382,7 +416,7 @@ AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
 }
 AI_EXPORT void th06_ai_objectives(float pickup,float attack){
     splitAttackWeight=attack;
-    auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=teamMode==0?0:attack;
+    auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=teamWeightsLocked()?0:attack;
     planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_danger(float weight){
@@ -391,7 +425,7 @@ AI_EXPORT void th06_ai_danger(float weight){
 }
 AI_EXPORT void th06_ai_edges(float weight,float distance){
     splitEdgeWeight=weight;
-    auto s=planner.settings();s.edgeWeight=teamMode==0?0:weight;s.edgeDistance=distance;planner.configure(s);
+    auto s=planner.settings();s.edgeWeight=teamWeightsLocked()?0:weight;s.edgeDistance=distance;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_density(float weight){
@@ -405,6 +439,7 @@ AI_EXPORT double th06_ai_metric(int field){
     case 19:return active&&autoBomb&&result.pressure.valid?result.pressure.score:-1;
     case 20:return bombDecision.highFrames();
     case 21:return bombDecision.pending()?bombDecision.remainingFrames():-1;
+    case 22:return teamWeightsLocked();case 23:return rescueWanted();
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
     case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);

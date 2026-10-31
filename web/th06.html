@@ -8,6 +8,7 @@ input:disabled{opacity:.45;cursor:not-allowed}
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
 <p class="hint">跟随：尽量靠近你 0.3 秒前的位置，输出站位、边缘惩罚与移动惩罚锁定为 0。分别压制：道中去你所在位置的另一侧，Boss 战自由避弹与输出，并恢复这些权重。避弹优先，收点仍参与评分。</p>
+<p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
 <label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
 <label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
@@ -34,7 +35,7 @@ input:disabled{opacity:.45;cursor:not-allowed}
 const $=id=>document.getElementById(id);let enabled=true,core=null;
 const splitWeights={attack:$('attack').value,edgeWeight:$('edgeWeight').value};
 function syncTeamControls(){
-  const following=$('teamMode').value==='0';
+  const following=core?!!core._th06_ai_metric(22):$('teamMode').value==='0';
   for(const id of ['attack','edgeWeight']){
     const slider=$(id);
     if(following){if(!slider.disabled)splitWeights[id]=slider.value;slider.value='0';}
@@ -51,7 +52,7 @@ function configureBomb(){
   core?._th06_ai_bomb_config(+$('autoBomb').checked,+$('bombThreshold').value,
     Math.round(+$('bombConfirm').value*60),Math.round(+$('bombDelay').value*60));
 }
-function configure(){syncTeamControls();if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,+$('attack').value);core._th06_ai_edges(+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
+function configure(){syncTeamControls();if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,$('attack').disabled?+splitWeights.attack:+$('attack').value);core._th06_ai_edges($('edgeWeight').disabled?+splitWeights.edgeWeight:+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
 $('horizon').oninput=$('beam').oninput=configure;
 $('pickup').oninput=$('attack').oninput=configure;
@@ -68,9 +69,12 @@ setInterval(()=>{
     const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('stats').textContent='正在加载红魔乡资源…';return;}
     if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();configureBomb();}
     const get=i=>core._th06_ai_metric(i);enabled=!!get(0);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;
+    syncTeamControls();
     $('stats').textContent=`${get(1)?'P2 AI 正在行动':'P2 AI 等待／停止行动'}\n本地席位 ${get(10)} · Boss伤害倍率 ${get(11).toFixed(2)}\n你：残机 ${get(12)} · 雷 ${get(17)} · 灵力 ${get(14)}\nAI：残机 ${get(13)} · 雷 ${get(18)} · 灵力 ${get(15)}\n读取危险物 ${get(4)}\n采集 + 搜索 ${get(2).toFixed(2)} ms\n精细判定 ${get(5)}\n搜索完成 ${get(6)} 帧\n安全前缀 ${get(9)} 帧\n决策次数 ${get(7)}\n状态位 ${get(3)}`;
     const pressure=get(19),remaining=get(21);
     $('stats').textContent+=`\n避弹压力 ${pressure<0?'暂无可靠结果':pressure.toFixed(2)}\n主动放雷 ${!$('autoBomb').checked?'已关闭':remaining>=0?`已决定，${(remaining/60).toFixed(2)} 秒后执行`:`确认 ${(get(20)/60).toFixed(2)} 秒`}`;
+    if(get(23))$('stats').textContent+='\n合作：优先靠近并救援玩家';
+    else if($('teamMode').value==='0'&&!get(22))$('stats').textContent+='\n合作：玩家暂不可跟随，已恢复自主输出与边缘避让';
   }catch(error){$('stats').textContent=error.message;}
 },250);
 </script></html>

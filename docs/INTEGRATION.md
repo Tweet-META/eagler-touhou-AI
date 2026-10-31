@@ -88,6 +88,8 @@ C++ 调用方可设置 `World.measurePressure=true`，从 `Result.pressure` 获�
 
 C++ `World` 还可提交 `formationGoal`、`formationWeight` 与 `formationSlack`，按轴计算 `weight × max(0, abs(position-goal)-slack)` 的队形代价，独立于收点／输出。权重默认 0，保持现有调用行为；启用时取消闲置回中心目标。TH06 本地双人接入用它实现跟随及道中分边，通用浏览器 ABI 保持 3，尚不提供这些字段的 JS 接口。
 
+`World.requiredFirstFocus` 默认 -1，0／1 分别要求首个逻辑帧释放／按下低速；用于作品已有的援助手势。约束启用时首层只推进一帧，并为释放低速提供静止动作，保证实际首帧按键与速度相符；后续预测动作仍可自由选择。TH06 在救援范围内用这个约束输出五次低速点按，复活和扣资源仍由多人核心执行。未启用约束时仍使用原来的 17 种动作与分块长度。
+
 ```cmake
 add_subdirectory(/path/to/eagler-touhou-ai ai)
 target_link_libraries(your_title PRIVATE eagler::ai)
