@@ -257,7 +257,7 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     const auto& controlled=controlledPlayer();
     const bool key=SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_F8];
     if(key&&!f8){enabled=!enabled;planner.reset();lastFrame=std::numeric_limits<u32>::max();}f8=key;
-    // Pause/tool menus freeze the pending delay. Death, dialogue, protection
+    // Pause/tool menus freeze pressure confirmation. Death, dialogue, protection
     // and leaving play cancel it; no response is synthesized after being hit.
     if(!enabled||g_Supervisor.curState!=SUPERVISOR_STATE_GAMEMANAGER||
        g_GameManager.isInReplay||g_GameManager.demoMode||g_GameManager.isGameCompleted||
@@ -452,8 +452,8 @@ AI_EXPORT void th06_ai_input_delay(int delayFrames){
     inputDelay.configure(delayFrames);inputTickValid=false;deliveredInput=0;
     lastFrame=std::numeric_limits<u32>::max();
 }
-AI_EXPORT void th06_ai_bomb_config(int value,float threshold,int confirmationFrames,int delayFrames){
-    autoBomb=value!=0;bombDecision.configure(threshold,confirmationFrames,delayFrames);
+AI_EXPORT void th06_ai_bomb_config(int value,float threshold,int confirmationFrames){
+    autoBomb=value!=0;bombDecision.configure(threshold,confirmationFrames);
     bombTickValid=false;bombPulse=false;lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_team_mode(int mode){
@@ -490,7 +490,6 @@ AI_EXPORT double th06_ai_metric(int field){
     case 7:return double(decisions);case 8:return g_GameManager.currentStage;case 9:return result.safeFrames;
     case 19:return active&&autoBomb&&result.pressure.valid?result.pressure.score:-1;
     case 20:return bombDecision.highFrames();
-    case 21:return bombDecision.pending()?bombDecision.remainingFrames():-1;
     case 22:return teamWeightsLocked();case 23:return rescueWanted();
     case 24:return deliveredInput;
     case 26:return actionRemaining;case 27:return planner.settings().horizon;

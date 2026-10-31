@@ -84,7 +84,7 @@ TH12 适配时应使用核心 `GameState` / `LaserWorld` 的有效判定状态�
 
 ## C++ 与打包
 
-C++ 调用方可设置 `World.measurePressure=true`，从 `Result.pressure` 获取独立于目标得分的局部避弹压力；预算耗尽或快照无效时 `valid=false`。计算复用原搜索候选和几何查询，没有第二轮规划。`BombDecision.hpp` 提供确认与延迟状态机，调用方每个有效逻辑帧调用一次 `tick`，资源、保护、死亡与菜单状态仍由作品判断。默认确认 6 帧、决定后延迟 12 帧，不提供决死检测或紧急跳过。当前由 TH06 原生接入使用，通用浏览器 ABI 和按键枚举保持不变。
+C++ 调用方可设置 `World.measurePressure=true`，从 `Result.pressure` 获取独立于目标得分的局部避弹压力；预算耗尽或快照无效时 `valid=false`。计算复用原搜索候选和几何查询，没有第二轮规划。`BombDecision.hpp` 提供压力确认状态机，`configure(threshold, confirmationFrames)` 设置参数，调用方每个有效逻辑帧调用一次 `tick`。默认连续确认 6 帧后直接返回放雷请求，不提供决死检测；资源、保护、死亡与菜单状态仍由作品判断，实际按键可经过通用输入延迟。当前由 TH06 原生接入使用，通用浏览器 ABI 和按键枚举保持不变。
 
 C++ `World` 还可提交 `formationGoal`、`formationWeight` 与 `formationSlack`，按轴计算 `weight × max(0, abs(position-goal)-slack)` 的队形代价，独立于收点／输出。权重默认 0，保持现有调用行为；启用时取消闲置回中心目标。TH06 本地双人接入用它实现跟随及道中分边，通用浏览器 ABI 保持 3，尚不提供这些字段的 JS 接口。
 

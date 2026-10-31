@@ -21,7 +21,7 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <label>AI 动作持续时间 <span id="adv">0.02 秒（1 帧）</span><input id="actionDuration" type="range" min="1" max="12" step="1" value="1"></label>
 <p class="hint">选定方向（包括停留）和高低速后，在持续时间内保持不变，搜索也按相同长度展开。超过预判帧数时，搜索会延长到至少覆盖完整动作。射击和放雷独立处理；暂停、死亡会立即停止。</p>
 <label>AI 输入延迟 <span id="idv">0.00 秒（0 帧）</span><input id="inputDelay" type="range" min="0" max="30" step="1" value="0"></label>
-<p class="hint">AI 按键整体延后生效，输入延迟会叠加到放雷延迟上。默认 0；暂停、死亡或切换关卡会清空排队输入。</p>
+<p class="hint">AI 按键整体延后生效，包括放雷。默认 0；暂停、死亡或切换关卡会清空排队输入。</p>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
 <p class="hint">只主动追下半屏道具，上半屏道具落下来后再收。</p>
 <label>输出站位权重 <span id="av">0.2</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.2"></label>
@@ -35,8 +35,7 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <label><input id="autoBomb" type="checkbox" checked> AI 主动放雷</label>
 <label>放雷压力阈值 <span id="btv">0.60</span><input id="bombThreshold" type="range" min="0" max="1" step="0.01" value="0.6"></label>
 <label>压力确认时间 <span id="bcv">0.10</span> 秒<input id="bombConfirm" type="range" min="0" max="1" step="0.05" value="0.1"></label>
-<label>放雷延迟 <span id="bdv">0.20</span> 秒<input id="bombDelay" type="range" min="0" max="1" step="0.05" value="0.2"></label>
-<p class="hint">阈值越低越舍得交雷。压力持续达到确认时间后才决定，再等待放雷延迟；期间继续避弹，不因压力短暂下降取消，也不会自动决死或跳过延迟。死亡、对话、关卡切换或获得保护时取消；暂停冻结计时，调整放雷参数重新判断。</p>
+<p class="hint">阈值越低越舍得交雷。压力持续达到确认时间后直接提交放雷按键，仍受通用输入延迟影响，不自动决死。死亡、对话、关卡切换或获得保护时取消；暂停冻结确认计时，调整放雷参数重新判断。</p>
 <pre id="stats">加载游戏…</pre>
 </details>
 <p class="hint">方向键移动 P1，Z 射击、Shift 低速、X 放雷，Esc 暂停。默认 P2 为 AI，使用另一位角色的 A 装备。AI 开关只影响 P2，你始终控制 P1；菜单与对话由你操作。</p>
@@ -81,9 +80,8 @@ function configureBomb(){
   syncStrength();
   $('btv').textContent=(+$('bombThreshold').value).toFixed(2);
   $('bcv').textContent=(+$('bombConfirm').value).toFixed(2);
-  $('bdv').textContent=(+$('bombDelay').value).toFixed(2);
   core?._th06_ai_bomb_config(+$('autoBomb').checked,+$('bombThreshold').value,
-    Math.round(+$('bombConfirm').value*60),Math.round(+$('bombDelay').value*60));
+    Math.round(+$('bombConfirm').value*60));
 }
 function configure(){syncStrength();syncTeamControls();$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,$('attack').disabled?+splitWeights.attack:+$('attack').value);core._th06_ai_edges($('edgeWeight').disabled?+splitWeights.edgeWeight:+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
@@ -99,7 +97,7 @@ $('densityPenalty').oninput=configure;
 $('edgeWeight').oninput=$('edgeDistance').oninput=configure;
 $('teamMode').onchange=()=>{core?._th06_ai_team_mode(+$('teamMode').value);configure();focus();};
 $('autoBomb').onchange=configureBomb;
-$('bombThreshold').oninput=$('bombConfirm').oninput=$('bombDelay').oninput=configureBomb;
+$('bombThreshold').oninput=$('bombConfirm').oninput=configureBomb;
 $('inputDelay').oninput=configureInput;
 $('actionDuration').oninput=configureAction;
 syncTeamControls();
@@ -114,10 +112,10 @@ setInterval(()=>{
     syncTeamControls();
     $('status').textContent=`${!enabled?'AI 已关闭':!get(1)?'等待游戏／暂停中':get(23)?'AI 正在救援你':$('teamMode').value==='0'&&!get(22)?'AI 正在自主作战':'AI 正在与你并肩作战'}\n你：残机 ${get(12)} · 雷 ${get(17)}\nAI：残机 ${get(13)} · 雷 ${get(18)}`;
     $('stats').textContent=`${get(1)?'P2 AI 正在行动':'P2 AI 等待／停止行动'}\n本地席位 ${get(10)} · Boss伤害倍率 ${get(11).toFixed(2)}\n你：残机 ${get(12)} · 雷 ${get(17)} · 灵力 ${get(14)}\nAI：残机 ${get(13)} · 雷 ${get(18)} · 灵力 ${get(15)}\n读取危险物 ${get(4)}\n采集 + 搜索 ${get(2).toFixed(2)} ms\n精细判定 ${get(5)}\n搜索完成 ${get(6)} 帧\n安全前缀 ${get(9)} 帧\n决策次数 ${get(7)}\n状态位 ${get(3)}`;
-    const pressure=get(19),remaining=get(21);
+    const pressure=get(19);
     $('stats').textContent+=`\n实际 AI 按键 0x${get(24).toString(16).toUpperCase()}`;
     $('stats').textContent+=`\n当前动作剩余 ${get(26)} 帧 · 实际预判 ${get(27)} 帧`;
-    $('stats').textContent+=`\n避弹压力 ${pressure<0?'暂无可靠结果':pressure.toFixed(2)}\n主动放雷 ${!$('autoBomb').checked?'已关闭':remaining>=0?`已决定，${(remaining/60).toFixed(2)} 秒后执行`:`确认 ${(get(20)/60).toFixed(2)} 秒`}`;
+    $('stats').textContent+=`\n避弹压力 ${pressure<0?'暂无可靠结果':pressure.toFixed(2)}\n主动放雷 ${!$('autoBomb').checked?'已关闭':`确认 ${(get(20)/60).toFixed(2)} 秒`}`;
     if(get(23))$('stats').textContent+='\n合作：优先靠近并救援玩家';
     else if($('teamMode').value==='0'&&!get(22))$('stats').textContent+='\n合作：玩家暂不可跟随，已恢复自主输出与边缘避让';
   }catch(error){$('status').textContent=error.message;}
