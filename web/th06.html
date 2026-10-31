@@ -7,7 +7,7 @@ input:disabled{opacity:.45;cursor:not-allowed}
 </style><main><h1>红魔乡 · 你 + AI 本地合作</h1><section><iframe id="game" src="./th06-runtime/th06.html" allow="autoplay; fullscreen; gamepad" title="红魔乡本地合作"></iframe><aside>
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
-<p class="hint">跟随：尽量靠近你半秒前的位置，输出站位与边缘惩罚锁定为 0。分别压制：道中去你所在位置的另一侧，Boss 战自由避弹与输出，并恢复这两项权重。避弹优先，收点仍参与评分。</p>
+<p class="hint">跟随：尽量靠近你 0.3 秒前的位置，输出站位、边缘惩罚与移动惩罚锁定为 0。分别压制：道中去你所在位置的另一侧，Boss 战自由避弹与输出，并恢复这些权重。避弹优先，收点仍参与评分。</p>
 <label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
 <label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>

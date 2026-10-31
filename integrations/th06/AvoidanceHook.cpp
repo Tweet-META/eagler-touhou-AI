@@ -45,8 +45,9 @@ int active=0;
 bool ownsInputs=false;
 int teamMode=0,splitSide=0; // 0 follows P1; 1 covers the opposite side on stage.
 float splitAttackWeight=.2f,splitEdgeWeight=1.f;
+const float splitMovementWeight=planner.settings().movementWeight;
 struct FollowHistory {
-    std::array<Vec2,31> positions{}; // Current sample plus 30 logical ticks.
+    std::array<Vec2,19> positions{}; // Current sample plus 18 logical ticks (0.3 s).
     std::size_t next=0,count=0;
     u32 frame=std::numeric_limits<u32>::max(),stage=0;
     void reset(){next=count=0;frame=std::numeric_limits<u32>::max();stage=0;}
@@ -60,7 +61,8 @@ struct FollowHistory {
 } followHistory;
 void applyTeamWeights(){
     auto s=planner.settings();s.attackWeight=teamMode==0?0:splitAttackWeight;
-    s.edgeWeight=teamMode==0?0:splitEdgeWeight;planner.configure(s);
+    s.edgeWeight=teamMode==0?0:splitEdgeWeight;
+    s.movementWeight=teamMode==0?0:splitMovementWeight;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
 void sampleTeammate(){
@@ -98,7 +100,7 @@ void formation(World& w){
         const auto delayed=followHistory.delayed();
         w.formationGoal={std::clamp(delayed.x,w.bounds.left,w.bounds.right),
                          std::clamp(delayed.y,w.bounds.top,w.bounds.bottom)};
-        w.formationWeight={.035f,.035f};w.formationSlack={24,24};
+        w.formationWeight={.035f,.035f};w.formationSlack={4,4};
     }else if(!g_Gui.BossPresent()){
         const float middle=(w.bounds.left+w.bounds.right)*.5f;
         // Keep the assigned side while P1 crosses the centre's 32 px band.
