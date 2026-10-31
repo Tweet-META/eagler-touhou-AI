@@ -16,6 +16,7 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <details id="advanced"><summary>高级选项</summary>
 <p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。不太聪明的ai：6 帧预判、2 条路线、动作 6 帧、输入延迟 1 帧、切换动作惩罚 0.100。弱弱？！：6 帧预判、2 条路线、动作 12 帧、输入延迟 2 帧、切换动作惩罚 2.000。其他参数不随档位改变。</p>
 <p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
+<p class="hint">弱弱？！另设收点权重 6、输出站位权重 2，边缘、危险距离和弹幕密度惩罚均为 0。跟随／救援期间输出站位仍锁定为 0，恢复自主作战时使用预设的 2。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
 <label>AI 动作持续时间 <span id="adv">0.02 秒（1 帧）</span><input id="actionDuration" type="range" min="1" max="12" step="1" value="1"></label>
@@ -48,10 +49,10 @@ const strengths={
   stronger:{horizon:12,beam:8,actionDuration:1,inputDelay:0},
   capable:{horizon:6,beam:2,actionDuration:3,inputDelay:1},
   clumsy:{horizon:6,beam:2,actionDuration:6,inputDelay:1,switchWeight:0.1},
-  weak:{horizon:6,beam:2,actionDuration:12,inputDelay:2,switchWeight:2},
+  weak:{horizon:6,beam:2,actionDuration:12,inputDelay:2,switchWeight:2,pickup:6,attack:2,edgeWeight:0,danger:0,densityPenalty:0},
 };
 function syncStrength(){
-  const matches=preset=>Object.entries(preset).every(([id,value])=>+$(id).value===value);
+  const matches=preset=>Object.entries(preset).every(([id,value])=>(id in splitWeights&&$(id).disabled?+splitWeights[id]:+$(id).value)===value);
   const selected=$('strength').value;
   const match=strengths[selected]&&matches(strengths[selected])?[selected]:Object.entries(strengths).find(([,preset])=>matches(preset));
   $('strength').value=match?match[0]:'custom';
@@ -94,7 +95,10 @@ $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('tog
 $('horizon').oninput=$('beam').oninput=configure;
 $('strength').onchange=()=>{
   const preset=strengths[$('strength').value];
-  for(const [id,value] of Object.entries(preset))$(id).value=value;
+  for(const [id,value] of Object.entries(preset)){
+    if(id in splitWeights){splitWeights[id]=String(value);if($(id).disabled)continue;}
+    $(id).value=value;
+  }
   configure();configureAction();configureInput();configureSwitch();configureBomb();focus();
 };
 $('pickup').oninput=$('attack').oninput=configure;
