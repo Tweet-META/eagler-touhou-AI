@@ -76,7 +76,7 @@ TH12 适配时应使用核心 `GameState` / `LaserWorld` 的有效判定状态�
 | --- | --- | --- |
 | 1 | 计算预算已用尽 | 返回已验证的最长前缀；观察 completedFrames / safeFrames 后调预算 |
 | 2 | 危险物超量、非法或快照缺项 | 默认停止接管并通知，不能声称这条路径安全 |
-| 4 | 未找到能走完预判窗口的路线 | 可返回已验证前缀，后续可单独加入放雷策略 |
+| 4 | 未找到能走完预判窗口的路线 | 返回已验证前缀；TH06 排除其他不确定／无效标志后立即放雷 |
 | 8 | 自机、边界等快照无效 | 停止接管 |
 | 16 | 不在有效游玩状态 | 释放该座位输入 |
 
@@ -84,7 +84,7 @@ TH12 适配时应使用核心 `GameState` / `LaserWorld` 的有效判定状态�
 
 ## C++ 与打包
 
-C++ 调用方可设置 `World.measurePressure=true`，从 `Result.pressure` 获取独立于目标得分的局部避弹压力；预算耗尽或快照无效时 `valid=false`。计算复用原搜索候选和几何查询，没有第二轮规划。`BombDecision.hpp` 提供压力确认状态机，`configure(threshold, confirmationFrames)` 设置参数，调用方每个有效逻辑帧调用一次 `tick`。默认连续确认 6 帧后直接返回放雷请求，不提供决死检测；资源、保护、死亡与菜单状态仍由作品判断，实际按键可经过通用输入延迟。当前由 TH06 原生接入使用，通用浏览器 ABI 和按键枚举保持不变。
+TH06 的自动放雷直接使用 `Result.flags`：必须有 `NoSafePath`，同时没有 `BudgetExhausted|IncompleteWorld|InvalidWorld|Inactive`。这表示有限搜索未找到完整预判窗口的安全路线；存在尚能执行的安全前缀也会立即提交放雷，不额外搜索或等待。资源、保护、存活与菜单状态由作品适配器检查，实际按键仍经过通用输入延迟；不检测或保证决死。普通距离／密度评分继续用于避弹，通用 Web ABI 和按键枚举保持不变。
 
 C++ `World` 还可提交 `formationGoal`、`formationWeight` 与 `formationSlack`，按轴计算 `weight × max(0, abs(position-goal)-slack)` 的队形代价，独立于收点／输出。权重默认 0，保持现有调用行为；启用时取消闲置回中心目标。TH06 本地双人接入用它实现跟随及道中分边，通用浏览器 ABI 保持 3，尚不提供这些字段的 JS 接口。
 

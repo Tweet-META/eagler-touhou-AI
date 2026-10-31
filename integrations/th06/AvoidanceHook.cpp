@@ -2,7 +2,6 @@
 // objects; only the returned logical input word enters authoritative state.
 #include "AvoidanceHook.hpp"
 #include <eagler/ai/Planner.hpp>
-#include <eagler/ai/BombDecision.hpp>
 #include <eagler/ai/InputDelay.hpp>
 #include "Player.hpp"
 #include "EnemyManager.hpp"
@@ -34,7 +33,6 @@
 namespace {
 using namespace eagler::ai;
 Planner planner;
-BombDecision bombDecision;
 InputDelay inputDelay;
 int requestedHorizon=12,actionRemaining=0;
 std::uint32_t heldAction=Focus;
@@ -54,7 +52,7 @@ std::uint16_t deliveredInput=0;
 void resetInput(){inputDelay.reset();inputTickValid=false;deliveredInput=0;}
 bool autoBomb=true,bombTickValid=false,bombPulse=false,humanBombRequested=false,previousHumanBomb=false;
 u32 bombTickFrame=0,bombTickStage=0;
-void resetBomb(){bombDecision.reset();bombTickValid=false;bombPulse=false;}
+void resetBomb(){bombTickValid=false;bombPulse=false;}
 std::array<Hazard,Planner::MaxHazards> hazards;
 std::array<Pickup,Planner::MaxPickups> pickups;
 std::array<AttackTarget,Planner::MaxTargets> targets;
@@ -154,7 +152,10 @@ bool updateBomb(){
         else if(frame==bombTickFrame)return bombPulse;
     }
     bombTickValid=true;bombTickFrame=frame;bombTickStage=stage;
-    bombPulse=bombDecision.tick(result.pressure.score,result.pressure.valid);
+    // A fully checked search with no surviving route triggers immediately.
+    // Running out of work budget is uncertainty, not proof of no route.
+    bombPulse=(result.flags&NoSafePath)&&
+        !(result.flags&(BudgetExhausted|IncompleteWorld|InvalidWorld|Inactive));
     return bombPulse;
 }
 std::uint16_t deliverInput(std::uint16_t wanted){
@@ -257,8 +258,8 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     const auto& controlled=controlledPlayer();
     const bool key=SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_F8];
     if(key&&!f8){enabled=!enabled;planner.reset();lastFrame=std::numeric_limits<u32>::max();}f8=key;
-    // Pause/tool menus freeze pressure confirmation. Death, dialogue, protection
-    // and leaving play cancel it; no response is synthesized after being hit.
+    // Death, dialogue, protection and leaving play cancel bomb requests;
+    // no response is synthesized after being hit.
     if(!enabled||g_Supervisor.curState!=SUPERVISOR_STATE_GAMEMANAGER||
        g_GameManager.isInReplay||g_GameManager.demoMode||g_GameManager.isGameCompleted||
        g_Gui.HasCurrentMsgIdx()||!controlled.chainCalc||controlled.playerState!=PLAYER_STATE_ALIVE||
@@ -287,7 +288,6 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     World w;const auto& p=controlled;const auto& gm=g_GameManager;
     w.commitFirstAction=true;w.committedAction=heldAction;
     w.committedFrames=actionRemaining+(actionTickValid&&actionTickFrame==gm.gameFrames?1:0);
-    w.measurePressure=autoBomb;
     w.player.position={p.positionCenter.x,p.positionCenter.y};
     // TH06 uses an axis-aligned player square; its circumscribed circle is a
     // conservative fit for the shared planner's circular player geometry.
@@ -452,9 +452,10 @@ AI_EXPORT void th06_ai_input_delay(int delayFrames){
     inputDelay.configure(delayFrames);inputTickValid=false;deliveredInput=0;
     lastFrame=std::numeric_limits<u32>::max();
 }
-AI_EXPORT void th06_ai_bomb_config(int value,float threshold,int confirmationFrames){
-    autoBomb=value!=0;bombDecision.configure(threshold,confirmationFrames);
-    bombTickValid=false;bombPulse=false;lastFrame=std::numeric_limits<u32>::max();
+AI_EXPORT void th06_ai_auto_bomb(int value){
+    autoBomb=value!=0;resetBomb();
+    if(!autoBomb){inputDelay.cancelButtons(TH_BUTTON_BOMB);deliveredInput&=~TH_BUTTON_BOMB;}
+    lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_team_mode(int mode){
     if(mode<0||mode>1)return;
@@ -488,8 +489,6 @@ AI_EXPORT double th06_ai_metric(int field){
     switch(field){case 0:return enabled;case 1:return active;case 2:return elapsedMs;case 3:return result.flags;
     case 4:return double(count);case 5:return result.stats.collisionTests;case 6:return result.stats.completedFrames;
     case 7:return double(decisions);case 8:return g_GameManager.currentStage;case 9:return result.safeFrames;
-    case 19:return active&&autoBomb&&result.pressure.valid?result.pressure.score:-1;
-    case 20:return bombDecision.highFrames();
     case 22:return teamWeightsLocked();case 23:return rescueWanted();
     case 24:return deliveredInput;
     case 26:return actionRemaining;case 27:return planner.settings().horizon;

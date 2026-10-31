@@ -14,7 +14,7 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
 <pre id="status" role="status">加载游戏…</pre>
 <details id="advanced"><summary>高级选项</summary>
-<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧。两档放雷阈值 0.60。有点强：6 帧预判、2 条路线、动作 3 帧、放雷阈值 0.55。其他参数不随档位改变。</p>
+<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；有点强：6 帧预判、2 条路线、动作 3 帧。其他参数不随档位改变。</p>
 <p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
@@ -32,10 +32,8 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <label>弹幕密度惩罚 <span id="nv">0.1</span><input id="densityPenalty" type="range" min="0" max="2" step="0.01" value="0.1"></label>
 <p class="hint">密度统计附近 32 像素内敌弹，越近贡献越大，最多累计 8。权重 0 关闭此项；激光和敌机仍避让，但不计入弹幕密度。</p>
 <p class="hint">危险距离惩罚默认 10，越高越倾向远离子弹；0 只关闭距离扣分，预测碰撞仍会剪枝。</p>
-<label><input id="autoBomb" type="checkbox" checked> AI 主动放雷</label>
-<label>放雷压力阈值 <span id="btv">0.60</span><input id="bombThreshold" type="range" min="0" max="1" step="0.01" value="0.6"></label>
-<label>压力确认时间 <span id="bcv">0.10</span> 秒<input id="bombConfirm" type="range" min="0" max="1" step="0.05" value="0.1"></label>
-<p class="hint">阈值越低越舍得交雷。压力持续达到确认时间后直接提交放雷按键，仍受通用输入延迟影响，不自动决死。死亡、对话、关卡切换或获得保护时取消；暂停冻结确认计时，调整放雷参数重新判断。</p>
+<label><input id="autoBomb" type="checkbox" checked> AI 无路时放雷</label>
+<p class="hint">搜索找不到能撑完整个预判窗口的安全路线时，立即提交放雷按键，不等待确认。搜索预算耗尽不算无路；有雷且未受保护时才触发，不自动决死。通用输入延迟仍生效。</p>
 <pre id="stats">加载游戏…</pre>
 </details>
 <p class="hint">方向键移动 P1，Z 射击、Shift 低速、X 放雷，Esc 暂停。默认 P2 为 AI，使用另一位角色的 A 装备。AI 开关只影响 P2，你始终控制 P1；菜单与对话由你操作。</p>
@@ -44,9 +42,9 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 </aside></section></main><script type="module">
 const $=id=>document.getElementById(id);let enabled=true,core=null;
 const strengths={
-  strong:{horizon:6,beam:2,actionDuration:1,bombThreshold:.60},
-  stronger:{horizon:12,beam:8,actionDuration:1,bombThreshold:.60},
-  capable:{horizon:6,beam:2,actionDuration:3,bombThreshold:.55},
+  strong:{horizon:6,beam:2,actionDuration:1},
+  stronger:{horizon:12,beam:8,actionDuration:1},
+  capable:{horizon:6,beam:2,actionDuration:3},
 };
 function syncStrength(){
   const match=Object.entries(strengths).find(([,preset])=>Object.entries(preset).every(([id,value])=>+$(id).value===value));
@@ -77,11 +75,7 @@ function configureInput(){
   core?._th06_ai_input_delay(frames);
 }
 function configureBomb(){
-  syncStrength();
-  $('btv').textContent=(+$('bombThreshold').value).toFixed(2);
-  $('bcv').textContent=(+$('bombConfirm').value).toFixed(2);
-  core?._th06_ai_bomb_config(+$('autoBomb').checked,+$('bombThreshold').value,
-    Math.round(+$('bombConfirm').value*60));
+  core?._th06_ai_auto_bomb(+$('autoBomb').checked);
 }
 function configure(){syncStrength();syncTeamControls();$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,$('attack').disabled?+splitWeights.attack:+$('attack').value);core._th06_ai_edges($('edgeWeight').disabled?+splitWeights.edgeWeight:+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
@@ -97,7 +91,6 @@ $('densityPenalty').oninput=configure;
 $('edgeWeight').oninput=$('edgeDistance').oninput=configure;
 $('teamMode').onchange=()=>{core?._th06_ai_team_mode(+$('teamMode').value);configure();focus();};
 $('autoBomb').onchange=configureBomb;
-$('bombThreshold').oninput=$('bombConfirm').oninput=configureBomb;
 $('inputDelay').oninput=configureInput;
 $('actionDuration').oninput=configureAction;
 syncTeamControls();
@@ -112,10 +105,10 @@ setInterval(()=>{
     syncTeamControls();
     $('status').textContent=`${!enabled?'AI 已关闭':!get(1)?'等待游戏／暂停中':get(23)?'AI 正在救援你':$('teamMode').value==='0'&&!get(22)?'AI 正在自主作战':'AI 正在与你并肩作战'}\n你：残机 ${get(12)} · 雷 ${get(17)}\nAI：残机 ${get(13)} · 雷 ${get(18)}`;
     $('stats').textContent=`${get(1)?'P2 AI 正在行动':'P2 AI 等待／停止行动'}\n本地席位 ${get(10)} · Boss伤害倍率 ${get(11).toFixed(2)}\n你：残机 ${get(12)} · 雷 ${get(17)} · 灵力 ${get(14)}\nAI：残机 ${get(13)} · 雷 ${get(18)} · 灵力 ${get(15)}\n读取危险物 ${get(4)}\n采集 + 搜索 ${get(2).toFixed(2)} ms\n精细判定 ${get(5)}\n搜索完成 ${get(6)} 帧\n安全前缀 ${get(9)} 帧\n决策次数 ${get(7)}\n状态位 ${get(3)}`;
-    const pressure=get(19);
     $('stats').textContent+=`\n实际 AI 按键 0x${get(24).toString(16).toUpperCase()}`;
     $('stats').textContent+=`\n当前动作剩余 ${get(26)} 帧 · 实际预判 ${get(27)} 帧`;
-    $('stats').textContent+=`\n避弹压力 ${pressure<0?'暂无可靠结果':pressure.toFixed(2)}\n主动放雷 ${!$('autoBomb').checked?'已关闭':`确认 ${(get(20)/60).toFixed(2)} 秒`}`;
+    const flags=get(3),uncertain=!!(flags&(1|2|8|16));
+    $('stats').textContent+=`\n安全路线 ${!get(1)?'等待游戏':uncertain?'检查未完成／快照无效':flags&4?'未找到完整路线':'已找到'}\n无路时放雷 ${$('autoBomb').checked?'开启':'关闭'}`;
     if(get(23))$('stats').textContent+='\n合作：优先靠近并救援玩家';
     else if($('teamMode').value==='0'&&!get(22))$('stats').textContent+='\n合作：玩家暂不可跟随，已恢复自主输出与边缘避让';
   }catch(error){$('status').textContent=error.message;}

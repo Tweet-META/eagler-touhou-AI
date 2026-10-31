@@ -52,7 +52,6 @@ struct World {
     // Optional team positioning, independent of pickup/attack objectives.
     // Zero axis weights disable it; slack avoids chasing an exact pixel.
     Vec2 formationGoal{}, formationWeight{}, formationSlack{};
-    bool measurePressure=false;
     int requiredFirstFocus=-1; // -1 free, 0 released, 1 pressed; first tick only.
     std::uint32_t committedAction=0;
     int committedFrames=0; // Unchangeable direction/focus prefix, including this tick.
@@ -78,17 +77,12 @@ struct Statistics {
     std::uint32_t collisionTests=0, treeVisits=0, expanded=0, indexedHazards=0;
     int completedFrames=0;
 };
-struct Pressure {
-    float score=0, safeDirectionRatio=1, bestClearance=0, density=0;
-    bool valid=false; // False for incomplete snapshots or exhausted budgets.
-};
 struct Result {
     std::uint32_t buttons=0, flags=0;
     Vec2 destination{}; // First tick, not the end of the whole route.
     float cost=0, clearance=0;
     int safeFrames=0;
     Statistics stats;
-    Pressure pressure;
 };
 
 // One instance per controlled player. No world/RNG mutations or clock reads.
@@ -110,7 +104,7 @@ private:
         std::uint32_t first=0,last=0;
         std::uint32_t ordinal=0;
         std::uint32_t collected=0;
-        float cost=0,margin=10000,densitySum=0;
+        float cost=0,margin=10000;
     };
     Settings config_;
     std::uint32_t previous_=0;

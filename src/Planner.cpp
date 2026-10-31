@@ -209,7 +209,7 @@ Result Planner::decide(const World& w){
     };
     if(w.incomplete||w.hazardCount>MaxHazards)result.flags|=IncompleteWorld;
     entries_.clear();order_.clear();tree_.clear();
-    const bool collectDensity=c.densityWeight>0||w.measurePressure;
+    const bool collectDensity=c.densityWeight>0;
     const float reach=std::max(p.fastSpeed,p.slowSpeed)*c.horizon+p.radius+std::max(c.proximityRange,collectDensity?32.f:0.f);
     for(std::size_t i=0;i<std::min<std::size_t>(w.hazardCount,MaxHazards);++i){
         const auto& h=w.hazards[i];if(!valid(h)){result.flags|=IncompleteWorld;continue;}
@@ -263,7 +263,6 @@ Result Planner::decide(const World& w){
                         if(margin<c.safetyMargin){safe=false;break;}
                     }
                     r.margin=std::min(r.margin,margin);
-                    if(w.measurePressure)r.densitySum+=density;
                     r.cost+=c.dangerWeight/(std::max(.1f,margin)+2);
                     r.cost+=c.densityWeight*density;
                     // The idle goal must not pull against collection/attack.
@@ -297,25 +296,7 @@ Result Planner::decide(const World& w){
             if(exhausted)break;
         }
         if(exhausted){result.flags|=BudgetExhausted;break;}
-        if(candidates_.empty()){
-            result.flags|=NoSafePath;
-            if(w.measurePressure)result.pressure={1,0,0,0,true};
-            break;
-        }
-        if(w.measurePressure){
-            // Summarize before score-based selection: objectives are not danger.
-            std::uint32_t directions=0;float widest=0,leastDensity=8;
-            for(const auto& route:candidates_){
-                directions|=1u<<((route.first&(Left|Right|Up|Down))>>2);
-                widest=std::max(widest,route.margin);
-                leastDensity=std::min(leastDensity,route.densitySum/float(elapsed+span));
-            }
-            int safeDirections=0;for(auto mask=directions;mask;mask&=mask-1)++safeDirections;
-            const float ratio=float(safeDirections)/9;
-            const float tight=1-std::clamp((widest-c.safetyMargin)/10.f,0.f,1.f);
-            const float crowded=std::clamp(leastDensity/4.f,0.f,1.f);
-            result.pressure={.55f*(1-ratio)+.30f*tight+.15f*crowded,ratio,widest,leastDensity,true};
-        }
+        if(candidates_.empty()){result.flags|=NoSafePath;break;}
         std::sort(candidates_.begin(),candidates_.end(),[](const Route& a,const Route& b){return a.cost==b.cost?a.ordinal<b.ordinal:a.cost<b.cost;});
         next_.clear();
         for(const auto& candidate:candidates_){
@@ -336,7 +317,6 @@ Result Planner::decide(const World& w){
         result.cost=fallback.cost;result.clearance=fallback.margin;result.safeFrames=fallbackTime;
         previous_=fallback.first;
     }else{result.flags|=NoSafePath;previous_=Focus;}
-    if(result.flags&(BudgetExhausted|IncompleteWorld|InvalidWorld|Inactive))result.pressure.valid=false;
     return result;
 }
 } // namespace eagler::ai
