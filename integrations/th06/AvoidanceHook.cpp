@@ -8,6 +8,7 @@
 #include "ItemManager.hpp"
 #include "Gui.hpp"
 #include "Supervisor.hpp"
+#include "ReplayExtension.hpp"
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
 #include "multiplayer/GameplaySession.hpp"
 #include <eagler/netplay/NetplayInput.hpp>
@@ -298,6 +299,35 @@ void Th06Ai::configureSession(){
     splitSide=0;followHistory.reset();applyTeamWeights();resetBomb();
     humanBombRequested=previousHumanBomb=false;
     planner.reset();lastFrame=std::numeric_limits<u32>::max();
+#endif
+}
+void Th06Ai::resetPracticeResources(){
+#ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
+    if(g_GameManager.isInReplay||g_GameManager.demoMode||!MultiplayerGameplay::IsMultiplayer())return;
+    bool practice=g_GameManager.isInPracticeMode!=0;
+#ifdef TH_ENABLE_THPRAC
+    practice=practice||PracticeRuntime::Active(); // Extra practice clears the vanilla flag.
+#endif
+    if(!practice)return;
+    // THPrac applies P1's configured stocks after player/replay registration.
+    // Copy the finalized values, not the prior attempt or the co-op default.
+    for(u8 seat=1;seat<MultiplayerGameplay::GetPlayerCount();++seat){
+        if(!MultiplayerGameplay::IsPlayerActive(seat))continue;
+        SetPlayerLives(seat,GetPlayerLives(0));
+        SetPlayerBombs(seat,GetPlayerBombs(0));
+        SetPlayerPower(seat,GetPlayerPower(0));
+    }
+    // Registration already captured an early resource snapshot. Replace it
+    // with the actual practice start so recorded AI inputs use the same stocks.
+    ReplayExtension::MultiplayerPlayerResourceSnapshot resources[TH06_MULTI_MAX_PLAYERS]{};
+    for(u8 seat=0;seat<MultiplayerGameplay::GetPlayerCount();++seat){
+        resources[seat].lives=GetPlayerLives(seat);
+        resources[seat].bombs=GetPlayerBombs(seat);
+        resources[seat].power=GetPlayerPower(seat);
+        resources[seat].challengeDeaths=g_MultiplayerContributionStats[seat].challengeDeaths;
+    }
+    ReplayExtension::CaptureMultiplayerStageResources(
+        g_GameManager.currentStage-1,resources,MultiplayerGameplay::GetPlayerCount());
 #endif
 }
 void Th06Ai::commitLocal(std::uint16_t humanInput){
