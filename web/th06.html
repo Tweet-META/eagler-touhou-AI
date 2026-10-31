@@ -4,13 +4,20 @@
 @media(max-width:900px){section{grid-template-columns:minmax(0,1fr)}iframe{justify-self:center;max-width:min(800px,calc((100vh - 110px)*4/3));max-width:min(800px,calc((100dvh - 110px)*4/3))}}
 select{font:inherit;color:inherit;background:#243443;border:1px solid #53687b;border-radius:5px;padding:5px 8px}
 input:disabled{opacity:.45;cursor:not-allowed}
+details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}summary{cursor:pointer;color:#a8b7c9}details:not([open])>summary{margin:0}[hidden]{display:none!important}
 </style><main><h1>红魔乡 · 你 + AI 本地合作</h1><section><iframe id="game" src="./th06-runtime/th06.html" allow="autoplay; fullscreen; gamepad" title="红魔乡本地合作"></iframe><aside>
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
+<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
+<p id="customStrength" class="hint" hidden>实力已由高级参数自定义；重新选择档位可恢复预设。</p>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
-<p class="hint">跟随：尽量靠近你 0.3 秒前的位置，输出站位、边缘惩罚与移动惩罚锁定为 0。分别压制：道中去你所在位置的另一侧，Boss 战自由避弹与输出，并恢复这些权重。避弹优先，收点仍参与评分。</p>
+<p class="hint">跟随队友：尽量跟着你行动。分别压制：道中与你分居左右，Boss 战自由避弹与输出。</p>
 <p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
-<label>预判帧数 <span id="hv">12</span><input id="horizon" type="range" min="6" max="24" step="3" value="12"></label>
-<label>保留路线 <span id="bv">8</span><input id="beam" type="range" min="2" max="16" step="2" value="8"></label>
+<pre id="status" role="status">加载游戏…</pre>
+<details id="advanced"><summary>高级选项</summary>
+<p class="hint">强强：6 帧、2 条路线；这么强？！：12 帧、8 条路线。下方可手动覆盖，其他参数不随档位改变。</p>
+<p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
+<label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
+<label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
 <p class="hint">只主动追下半屏道具，上半屏道具落下来后再收。</p>
 <label>输出站位权重 <span id="av">0.2</span><input id="attack" type="range" min="0" max="2" step="0.05" value="0.2"></label>
@@ -27,12 +34,18 @@ input:disabled{opacity:.45;cursor:not-allowed}
 <label>放雷延迟 <span id="bdv">0.20</span> 秒<input id="bombDelay" type="range" min="0" max="1" step="0.05" value="0.2"></label>
 <p class="hint">阈值越低越舍得交雷。压力持续达到确认时间后才决定，再等待放雷延迟；期间继续避弹，不因压力短暂下降取消，也不会自动决死或跳过延迟。死亡、对话、关卡切换或获得保护时取消；暂停冻结计时，调整放雷参数重新判断。</p>
 <pre id="stats">加载游戏…</pre>
+</details>
 <p class="hint">方向键移动 P1，Z 射击、Shift 低速、X 放雷，Esc 暂停。默认 P2 为 AI，使用另一位角色的 A 装备。AI 开关只影响 P2，你始终控制 P1；菜单与对话由你操作。</p>
 <p class="hint">THPrac 已启用：从主菜单 Practice 选择机体后进入练习设置。F12 打开高级选项，Backspace 打开功能菜单，Tab 切换统计面板。练习／高级菜单打开时 AI 交还控制，关闭后恢复。</p>
-<p class="hint">启用原有多人玩法：独立资源、掉落与援助、贡献统计及团灭处理。双人对 Boss 总伤害乘 0.75，原始血量不额外叠加；没有网络连接。AI 读取弹幕、输出普通按键。</p>
 <a href="./">返回合成弹幕演示</a>
 </aside></section></main><script type="module">
 const $=id=>document.getElementById(id);let enabled=true,core=null;
+const strengths={strong:{horizon:6,beam:2},stronger:{horizon:12,beam:8}};
+function syncStrength(){
+  const match=Object.entries(strengths).find(([,preset])=>preset.horizon===+$('horizon').value&&preset.beam===+$('beam').value);
+  $('strength').value=match?match[0]:'custom';
+  $('customStrength').hidden=!!match;
+}
 const splitWeights={attack:$('attack').value,edgeWeight:$('edgeWeight').value};
 function syncTeamControls(){
   const following=core?!!core._th06_ai_metric(22):$('teamMode').value==='0';
@@ -52,9 +65,10 @@ function configureBomb(){
   core?._th06_ai_bomb_config(+$('autoBomb').checked,+$('bombThreshold').value,
     Math.round(+$('bombConfirm').value*60),Math.round(+$('bombDelay').value*60));
 }
-function configure(){syncTeamControls();if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,$('attack').disabled?+splitWeights.attack:+$('attack').value);core._th06_ai_edges($('edgeWeight').disabled?+splitWeights.edgeWeight:+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
+function configure(){syncStrength();syncTeamControls();$('hv').textContent=$('horizon').value;$('bv').textContent=$('beam').value;if(!core)return;core._th06_ai_configure(+$('horizon').value,+$('beam').value,40000);core._th06_ai_objectives(+$('pickup').value,$('attack').disabled?+splitWeights.attack:+$('attack').value);core._th06_ai_edges($('edgeWeight').disabled?+splitWeights.edgeWeight:+$('edgeWeight').value,+$('edgeDistance').value);$('ewv').textContent=$('edgeWeight').value;$('edv').textContent=$('edgeDistance').value;core._th06_ai_danger(+$('danger').value);core._th06_ai_density(+$('densityPenalty').value);$('nv').textContent=$('densityPenalty').value;$('pv').textContent=$('pickup').value;$('av').textContent=$('attack').value;$('dv').textContent=$('danger').value;}
 $('toggle').onclick=()=>{enabled=!enabled;core?._th06_ai_enable(+enabled);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;focus();};$('focus').onclick=focus;
 $('horizon').oninput=$('beam').oninput=configure;
+$('strength').onchange=()=>{const preset=strengths[$('strength').value];$('horizon').value=preset.horizon;$('beam').value=preset.beam;configure();focus();};
 $('pickup').oninput=$('attack').oninput=configure;
 $('danger').oninput=configure;
 $('densityPenalty').oninput=configure;
@@ -66,15 +80,16 @@ syncTeamControls();
 configureBomb();
 setInterval(()=>{
   try{
-    const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('stats').textContent='正在加载红魔乡资源…';return;}
+    const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('status').textContent='正在加载红魔乡资源…';return;}
     if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();configureBomb();}
     const get=i=>core._th06_ai_metric(i);enabled=!!get(0);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;
     syncTeamControls();
+    $('status').textContent=`${!enabled?'AI 已关闭':!get(1)?'等待游戏／暂停中':get(23)?'AI 正在救援你':$('teamMode').value==='0'&&!get(22)?'AI 正在自主作战':'AI 正在与你并肩作战'}\n你：残机 ${get(12)} · 雷 ${get(17)}\nAI：残机 ${get(13)} · 雷 ${get(18)}`;
     $('stats').textContent=`${get(1)?'P2 AI 正在行动':'P2 AI 等待／停止行动'}\n本地席位 ${get(10)} · Boss伤害倍率 ${get(11).toFixed(2)}\n你：残机 ${get(12)} · 雷 ${get(17)} · 灵力 ${get(14)}\nAI：残机 ${get(13)} · 雷 ${get(18)} · 灵力 ${get(15)}\n读取危险物 ${get(4)}\n采集 + 搜索 ${get(2).toFixed(2)} ms\n精细判定 ${get(5)}\n搜索完成 ${get(6)} 帧\n安全前缀 ${get(9)} 帧\n决策次数 ${get(7)}\n状态位 ${get(3)}`;
     const pressure=get(19),remaining=get(21);
     $('stats').textContent+=`\n避弹压力 ${pressure<0?'暂无可靠结果':pressure.toFixed(2)}\n主动放雷 ${!$('autoBomb').checked?'已关闭':remaining>=0?`已决定，${(remaining/60).toFixed(2)} 秒后执行`:`确认 ${(get(20)/60).toFixed(2)} 秒`}`;
     if(get(23))$('stats').textContent+='\n合作：优先靠近并救援玩家';
     else if($('teamMode').value==='0'&&!get(22))$('stats').textContent+='\n合作：玩家暂不可跟随，已恢复自主输出与边缘避让';
-  }catch(error){$('stats').textContent=error.message;}
+  }catch(error){$('status').textContent=error.message;}
 },250);
 </script></html>
