@@ -485,6 +485,10 @@ AI_EXPORT void th06_ai_density(float weight){
     auto s=planner.settings();s.densityWeight=weight;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
 }
+AI_EXPORT void th06_ai_switch_weight(float weight){
+    auto s=planner.settings();s.switchWeight=weight;planner.configure(s);
+    lastFrame=std::numeric_limits<u32>::max();
+}
 AI_EXPORT double th06_ai_metric(int field){
     switch(field){case 0:return enabled;case 1:return active;case 2:return elapsedMs;case 3:return result.flags;
     case 4:return double(count);case 5:return result.stats.collisionTests;case 6:return result.stats.completedFrames;

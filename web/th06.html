@@ -7,19 +7,21 @@ input:disabled{opacity:.45;cursor:not-allowed}
 details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}summary{cursor:pointer;color:#a8b7c9}details:not([open])>summary{margin:0}[hidden]{display:none!important}
 </style><main><h1>红魔乡 · 你 + AI 本地合作</h1><section><iframe id="game" src="./th06-runtime/th06.html" allow="autoplay; fullscreen; gamepad" title="红魔乡本地合作"></iframe><aside>
 <button id="toggle">AI：开启</button><button id="focus">操作游戏</button>
-<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="capable">有点强（H混关实力）</option><option value="clumsy">有点弱的ai</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
+<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="capable">有点强（H混关实力）</option><option value="clumsy">不太聪明的ai</option><option value="weak">弱弱？！</option><option value="custom" disabled hidden>自定义（高级选项）</option></select></label>
 <p id="customStrength" class="hint" hidden>实力已由高级参数自定义；重新选择档位可恢复预设。</p>
 <label>配合方式 <select id="teamMode"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
 <p class="hint">跟随队友：尽量跟着你行动。分别压制：道中与你分居左右，Boss 战自由避弹与输出。</p>
 <p class="hint">你用尽残机进入待救状态后，AI 有残机会优先靠近并赠送一残；无法援助时，暂时恢复输出站位和边缘惩罚权重。你正常重生或获救后恢复所选配合方式。</p>
 <pre id="status" role="status">加载游戏…</pre>
 <details id="advanced"><summary>高级选项</summary>
-<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。有点弱的ai：6 帧预判、2 条路线、动作 6 帧、输入延迟 2 帧。其他参数不随档位改变。</p>
+<p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。不太聪明的ai与弱弱？！目前参数相同：6 帧预判、2 条路线、动作 6 帧、输入延迟 2 帧。其他参数不随档位改变。</p>
 <p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
 <label>AI 动作持续时间 <span id="adv">0.02 秒（1 帧）</span><input id="actionDuration" type="range" min="1" max="12" step="1" value="1"></label>
 <p class="hint">选定方向（包括停留）和高低速后，在持续时间内保持不变，搜索也按相同长度展开。超过预判帧数时，搜索会延长到至少覆盖完整动作。射击和放雷独立处理；暂停、死亡会立即停止。</p>
+<label>切换动作惩罚 <span id="swv">0.025</span><input id="switchWeight" type="range" min="0" max="2" step="0.005" value="0.025"></label>
+<p class="hint">每次改变方向、高低速或动停时加一次代价；越高越倾向继续原动作，0 关闭。仍须遵守动作持续时间，默认保持原来的 0.025。</p>
 <label>AI 输入延迟 <span id="idv">0.00 秒（0 帧）</span><input id="inputDelay" type="range" min="0" max="30" step="1" value="0"></label>
 <p class="hint">AI 按键整体延后生效，包括放雷。默认 0；暂停、死亡或切换关卡会清空排队输入。</p>
 <label>收点权重 <span id="pv">3</span><input id="pickup" type="range" min="0" max="6" step="0.25" value="3"></label>
@@ -46,9 +48,12 @@ const strengths={
   stronger:{horizon:12,beam:8,actionDuration:1,inputDelay:0},
   capable:{horizon:6,beam:2,actionDuration:3,inputDelay:1},
   clumsy:{horizon:6,beam:2,actionDuration:6,inputDelay:2},
+  weak:{horizon:6,beam:2,actionDuration:6,inputDelay:2},
 };
 function syncStrength(){
-  const match=Object.entries(strengths).find(([,preset])=>Object.entries(preset).every(([id,value])=>+$(id).value===value));
+  const matches=preset=>Object.entries(preset).every(([id,value])=>+$(id).value===value);
+  const selected=$('strength').value;
+  const match=strengths[selected]&&matches(strengths[selected])?[selected]:Object.entries(strengths).find(([,preset])=>matches(preset));
   $('strength').value=match?match[0]:'custom';
   $('customStrength').hidden=!!match;
 }
@@ -76,6 +81,10 @@ function configureInput(){
   $('idv').textContent=`${(frames/60).toFixed(2)} 秒（${frames} 帧）`;
   core?._th06_ai_input_delay(frames);
 }
+function configureSwitch(){
+  $('swv').textContent=(+$('switchWeight').value).toFixed(3);
+  core?._th06_ai_switch_weight(+$('switchWeight').value);
+}
 function configureBomb(){
   core?._th06_ai_auto_bomb(+$('autoBomb').checked);
 }
@@ -95,14 +104,16 @@ $('teamMode').onchange=()=>{core?._th06_ai_team_mode(+$('teamMode').value);confi
 $('autoBomb').onchange=configureBomb;
 $('inputDelay').oninput=configureInput;
 $('actionDuration').oninput=configureAction;
+$('switchWeight').oninput=configureSwitch;
 syncTeamControls();
 configureAction();
 configureBomb();
 configureInput();
+configureSwitch();
 setInterval(()=>{
   try{
     const m=$('game').contentWindow.Module;if(!m?._th06_ai_metric){$('status').textContent='正在加载红魔乡资源…';return;}
-    if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();configureAction();configureBomb();configureInput();}
+    if(core!==m){core=m;core._th06_ai_enable(+enabled);core._th06_ai_team_mode(+$('teamMode').value);configure();configureAction();configureBomb();configureInput();configureSwitch();}
     const get=i=>core._th06_ai_metric(i);enabled=!!get(0);$('toggle').textContent=`AI：${enabled?'开启':'关闭'}`;
     syncTeamControls();
     $('status').textContent=`${!enabled?'AI 已关闭':!get(1)?'等待游戏／暂停中':get(23)?'AI 正在救援你':$('teamMode').value==='0'&&!get(22)?'AI 正在自主作战':'AI 正在与你并肩作战'}\n你：残机 ${get(12)} · 雷 ${get(17)}\nAI：残机 ${get(13)} · 雷 ${get(18)}`;
