@@ -3,6 +3,7 @@
 #include "AvoidanceHook.hpp"
 #include <eagler/ai/Planner.hpp>
 #include <eagler/ai/BombDecision.hpp>
+#include <eagler/ai/InputImpairment.hpp>
 #include "Player.hpp"
 #include "EnemyManager.hpp"
 #include "ItemManager.hpp"
@@ -34,6 +35,11 @@ namespace {
 using namespace eagler::ai;
 Planner planner;
 BombDecision bombDecision;
+InputImpairment inputImpairment;
+bool inputTickValid=false,wasRescuing=false;
+u32 inputTickFrame=0,inputTickStage=0;
+std::uint16_t deliveredInput=0;
+void resetInput(){inputImpairment.reset();inputTickValid=false;deliveredInput=0;}
 bool autoBomb=true,bombTickValid=false,bombPulse=false,humanBombRequested=false,previousHumanBomb=false;
 u32 bombTickFrame=0,bombTickStage=0;
 void resetBomb(){bombDecision.reset();bombTickValid=false;bombPulse=false;}
@@ -115,7 +121,7 @@ void sampleTeammate(){
     return g_Player;
 #endif
 }
-bool updateBomb(){
+bool canBomb(){
     const auto& player=controlledPlayer();
     bool eligible=autoBomb&&player.playerState==PLAYER_STATE_ALIVE&&!player.bombInfo.isInUse&&
                   player.bombInfo.calc&&player.respawnTimer!=0;
@@ -126,7 +132,10 @@ bool updateBomb(){
 #else
     eligible=eligible&&g_GameManager.bombsRemaining>0;
 #endif
-    if(!eligible){resetBomb();return false;}
+    return eligible;
+}
+bool updateBomb(){
+    if(!canBomb()){resetBomb();return false;}
     const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
     if(bombTickValid){
         if(stage!=bombTickStage||frame<bombTickFrame)resetBomb();
@@ -135,6 +144,19 @@ bool updateBomb(){
     bombTickValid=true;bombTickFrame=frame;bombTickStage=stage;
     bombPulse=bombDecision.tick(result.pressure.score,result.pressure.valid);
     return bombPulse;
+}
+std::uint16_t deliverInput(std::uint16_t wanted){
+    const u32 frame=g_GameManager.gameFrames,stage=u32(g_GameManager.currentStage);
+    if(inputTickValid&&(stage!=inputTickStage||frame<inputTickFrame))resetInput();
+    const bool bombAllowed=canBomb();
+    if(!bombAllowed){inputImpairment.cancelButtons(TH_BUTTON_BOMB);wanted&=~TH_BUTTON_BOMB;}
+    if(!inputTickValid||frame!=inputTickFrame){
+        inputTickValid=true;inputTickFrame=frame;inputTickStage=stage;
+        deliveredInput=inputImpairment.tick(wanted);
+    }
+    // A delayed bomb never survives death/protection or becomes a deathbomb.
+    if(!bombAllowed)deliveredInput&=~TH_BUTTON_BOMB;
+    return deliveredInput;
 }
 void add(const Hazard& h){if(count<hazards.size())hazards[count++]=h;else overflow=true;}
 void formation(World& w){
@@ -237,13 +259,15 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
 #ifdef TH_ENABLE_THPRAC
     active=active&&!PracticeRuntime::CapturesGameInput();
 #endif
-    if(!active){if(wasActive)planner.reset();wasActive=false;lastFrame=std::numeric_limits<u32>::max();return input;}
+    if(!active){if(wasActive)planner.reset();resetInput();wasRescuing=false;wasActive=false;lastFrame=std::numeric_limits<u32>::max();return input;}
+    const bool rescuing=rescueWanted();
+    if(rescuing!=wasRescuing){resetInput();wasRescuing=rescuing;} // Do not donate again from stale rescue taps.
     applyTeamWeights();
     if(!wasActive||g_GameManager.currentStage!=int(lastStage)||g_GameManager.gameFrames<lastFrame)planner.reset();
     wasActive=true;
     constexpr std::uint16_t owned=TH_BUTTON_DIRECTION|TH_BUTTON_FOCUS|TH_BUTTON_SHOOT|TH_BUTTON_BOMB;
     const auto apply=[&](std::uint16_t ai){return std::uint16_t((input&~owned)|ai);};
-    if(lastFrame==g_GameManager.gameFrames&&lastStage==u32(g_GameManager.currentStage))return apply(cached);
+    if(lastFrame==g_GameManager.gameFrames&&lastStage==u32(g_GameManager.currentStage))return apply(deliverInput(cached));
     lastFrame=g_GameManager.gameFrames;lastStage=u32(g_GameManager.currentStage);
     const auto begin=SDL_GetPerformanceCounter();count=0;overflow=false;
     const float scale=g_Supervisor.effectiveFramerateMultiplier;
@@ -325,11 +349,11 @@ std::uint16_t Th06Ai::filter(std::uint16_t input){
     w.hazards=hazards.data();w.hazardCount=count;w.incomplete=overflow;
     result=planner.decide(w);decisions++;
     elapsedMs=1000.*double(SDL_GetPerformanceCounter()-begin)/double(SDL_GetPerformanceFrequency());
-    if(result.flags&(IncompleteWorld|InvalidWorld)){resetBomb();cached=input&owned;return input;}
+    if(result.flags&(IncompleteWorld|InvalidWorld)){resetBomb();resetInput();cached=input&owned;return input;}
     cached=map(result.buttons);
     if(rescueWanted())cached&=~TH_BUTTON_SHOOT; // Native life-transfer gesture requires no shooting.
     if(updateBomb())cached|=TH_BUTTON_BOMB;
-    return apply(cached);
+    return apply(deliverInput(cached));
 }
 void Th06Ai::configureSession(){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
@@ -342,6 +366,7 @@ void Th06Ai::configureSession(){
     session.players[1].character=g_GameManager.character==0?1:0;session.players[1].shot=0;
     MultiplayerGameplay::Configure(session);
     splitSide=0;followHistory.reset();applyTeamWeights();resetBomb();
+    resetInput();inputImpairment.startRun();wasRescuing=false;
     humanBombRequested=previousHumanBomb=false;
     planner.reset();lastFrame=std::numeric_limits<u32>::max();
 #endif
@@ -379,12 +404,13 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     if(g_GameManager.isInReplay||g_GameManager.demoMode){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
-        followHistory.reset();resetBomb();active=0;return;
+        followHistory.reset();resetBomb();resetInput();active=0;return;
     }
     if(!MultiplayerGameplay::IsMultiplayer()){
         if(ownsInputs){Netplay::Input::ClearPlayerButtonOverrides();ownsInputs=false;}
         followHistory.reset();
         resetBomb();
+        resetInput();
         return;
     }
     const bool humanBomb=(humanInput&TH_BUTTON_BOMB)!=0;
@@ -400,7 +426,11 @@ void Th06Ai::commitLocal(std::uint16_t humanInput){
 #endif
 }
 extern "C" {
-AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();resetBomb();lastFrame=std::numeric_limits<u32>::max();}
+AI_EXPORT void th06_ai_enable(int value){enabled=value!=0;planner.reset();resetBomb();resetInput();lastFrame=std::numeric_limits<u32>::max();}
+AI_EXPORT void th06_ai_input_config(int delayFrames,float failureRate){
+    inputImpairment.configure(delayFrames,failureRate);inputTickValid=false;deliveredInput=0;
+    lastFrame=std::numeric_limits<u32>::max();
+}
 AI_EXPORT void th06_ai_bomb_config(int value,float threshold,int confirmationFrames,int delayFrames){
     autoBomb=value!=0;bombDecision.configure(threshold,confirmationFrames,delayFrames);
     bombTickValid=false;bombPulse=false;lastFrame=std::numeric_limits<u32>::max();
@@ -440,6 +470,7 @@ AI_EXPORT double th06_ai_metric(int field){
     case 20:return bombDecision.highFrames();
     case 21:return bombDecision.pending()?bombDecision.remainingFrames():-1;
     case 22:return teamWeightsLocked();case 23:return rescueWanted();
+    case 24:return deliveredInput;case 25:return inputImpairment.failedPresses();
 #ifdef TH_ENABLE_MULTIPLAYER_GAMEPLAY
     case 10:return MultiplayerGameplay::GetPlayerCount();case 11:return GetMultiplayerBossDamageMultiplier();
     case 12:return GetPlayerLives(0);case 13:return GetPlayerLives(1);

@@ -90,6 +90,8 @@ C++ `World` 还可提交 `formationGoal`、`formationWeight` 与 `formationSlack
 
 `World.requiredFirstFocus` 默认 -1，0／1 分别要求首个逻辑帧释放／按下低速；用于作品已有的援助手势。约束启用时首层只推进一帧，并为释放低速提供静止动作，保证实际首帧按键与速度相符；后续预测动作仍可自由选择。TH06 在救援范围内用这个约束输出五次低速点按，复活和扣资源仍由多人核心执行。未启用约束时仍使用原来的 17 种动作与分块长度。
 
+`InputImpairment.hpp` 可放在规划结果到作品座位输入之间。`configure(delayFrames, failureRate)` 设置最多 60 帧延迟和 0～1 的每键按下失败率；`tick(buttons)` 必须每逻辑帧至多执行一次。失败按键直到请求释放前保持屏蔽，释放事件不丢弃；抽签使用本对象的独立随机状态。`reset` 清空延迟及按下状态，`startRun` 同时重置独立种子与统计，`cancelButtons(mask)` 可清除待执行的某类按键。作品仍负责死亡／暂停时释放输入，以及失效 Bomb 的取消；不能把延迟后的按键用于菜单或在录像播放时重新抽签。当前仅 TH06 接入此层，默认零延迟、零失败，通用 Web ABI 未变。
+
 ```cmake
 add_subdirectory(/path/to/eagler-touhou-ai ai)
 target_link_libraries(your_title PRIVATE eagler::ai)
