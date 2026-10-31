@@ -15,8 +15,8 @@ details{margin:18px 0;padding:12px;border:1px solid #354657;border-radius:6px}su
 <pre id="status" role="status">加载游戏…</pre>
 <details id="advanced"><summary>高级选项</summary>
 <p class="hint">强强：6 帧预判、2 条路线、动作 1 帧；这么强？！：12 帧预判、8 条路线、动作 1 帧；两档输入延迟为 0。有点强：6 帧预判、2 条路线、动作 3 帧、输入延迟 1 帧。不太聪明的ai：6 帧预判、2 条路线、动作 6 帧、输入延迟 1 帧、切换动作惩罚 0.100。弱弱？！：6 帧预判、2 条路线、动作 12 帧、输入延迟 2 帧、切换动作惩罚 2.000。其他参数不随档位改变。</p>
-<p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；无法跟随或切回分别压制时恢复权重。</p>
-<p class="hint">弱弱？！另设收点权重 6、输出站位权重 2，边缘、危险距离和弹幕密度惩罚均为 0。跟随／救援期间输出站位仍锁定为 0，恢复自主作战时使用预设的 2。</p>
+<p class="hint">跟随延迟为 0.3 秒，输出站位、边缘惩罚与移动惩罚锁定为 0；弱弱？！跟随时例外保留输出站位权重 2。无法跟随或切回分别压制时恢复权重。</p>
+<p class="hint">弱弱？！另设收点权重 6、输出站位权重 2，边缘、危险距离和弹幕密度惩罚均为 0。救援期间仍暂停输出站位评分。</p>
 <label>预判帧数 <span id="hv">6</span><input id="horizon" type="range" min="6" max="24" step="3" value="6"></label>
 <label>保留路线 <span id="bv">2</span><input id="beam" type="range" min="2" max="16" step="2" value="2"></label>
 <label>AI 动作持续时间 <span id="adv">0.02 秒（1 帧）</span><input id="actionDuration" type="range" min="1" max="12" step="1" value="1"></label>
@@ -57,15 +57,18 @@ function syncStrength(){
   const match=strengths[selected]&&matches(strengths[selected])?[selected]:Object.entries(strengths).find(([,preset])=>matches(preset));
   $('strength').value=match?match[0]:'custom';
   $('customStrength').hidden=!!match;
+  core?._th06_ai_follow_attack(+($('strength').value==='weak'));
 }
 const splitWeights={attack:$('attack').value,edgeWeight:$('edgeWeight').value};
 function syncTeamControls(){
   const following=core?!!core._th06_ai_metric(22):$('teamMode').value==='0';
+  const rescuing=core?!!core._th06_ai_metric(23):false;
   for(const id of ['attack','edgeWeight']){
     const slider=$(id);
-    if(following){if(!slider.disabled)splitWeights[id]=slider.value;slider.value='0';}
+    const locked=following&&(id!=='attack'||$('strength').value!=='weak'||rescuing);
+    if(locked){if(!slider.disabled)splitWeights[id]=slider.value;slider.value='0';}
     else if(slider.disabled)slider.value=splitWeights[id];
-    slider.disabled=following;
+    slider.disabled=locked;
   }
   $('av').textContent=$('attack').value;$('ewv').textContent=$('edgeWeight').value;
 }

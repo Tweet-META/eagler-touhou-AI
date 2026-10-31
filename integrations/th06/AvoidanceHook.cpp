@@ -66,6 +66,7 @@ std::uint64_t decisions=0;
 int active=0;
 bool ownsInputs=false;
 int teamMode=0,splitSide=0; // 0 follows P1; 1 covers the opposite side on stage.
+bool preserveFollowAttack=false;
 float splitAttackWeight=.2f,splitEdgeWeight=1.f;
 const float splitMovementWeight=planner.settings().movementWeight;
 bool humanUnavailable(){
@@ -87,6 +88,7 @@ bool rescueWanted(){
 #endif
 }
 bool teamWeightsLocked(){return rescueWanted()||(teamMode==0&&!humanUnavailable());}
+bool attackWeightLocked(){return rescueWanted()||(!preserveFollowAttack&&teamMode==0&&!humanUnavailable());}
 struct FollowHistory {
     std::array<Vec2,19> positions{}; // Current sample plus 18 logical ticks (0.3 s).
     std::size_t next=0,count=0;
@@ -102,7 +104,7 @@ struct FollowHistory {
 } followHistory;
 void applyTeamWeights(){
     const bool locked=teamWeightsLocked();auto s=planner.settings();
-    const float attack=locked?0:splitAttackWeight,edge=locked?0:splitEdgeWeight,movement=locked?0:splitMovementWeight;
+    const float attack=attackWeightLocked()?0:splitAttackWeight,edge=locked?0:splitEdgeWeight,movement=locked?0:splitMovementWeight;
     if(s.attackWeight==attack&&s.edgeWeight==edge&&s.movementWeight==movement)return;
     s.attackWeight=attack;s.edgeWeight=edge;s.movementWeight=movement;planner.configure(s);
     lastFrame=std::numeric_limits<u32>::max();
@@ -462,6 +464,11 @@ AI_EXPORT void th06_ai_team_mode(int mode){
     teamMode=mode;splitSide=0;planner.reset();lastFrame=std::numeric_limits<u32>::max();
     applyTeamWeights();
 }
+AI_EXPORT void th06_ai_follow_attack(int value){
+    const bool preserve=value!=0;
+    if(preserveFollowAttack==preserve)return;
+    preserveFollowAttack=preserve;applyTeamWeights();
+}
 AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
     requestedHorizon=std::clamp(horizon,1,Planner::MaxHorizon);
     auto s=planner.settings();s.horizon=std::max(requestedHorizon,s.actionFrames);s.beamWidth=beam;s.maxHazards=4096;
@@ -469,7 +476,7 @@ AI_EXPORT void th06_ai_configure(int horizon,int beam,int budget){
 }
 AI_EXPORT void th06_ai_objectives(float pickup,float attack){
     splitAttackWeight=attack;
-    auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=teamWeightsLocked()?0:attack;
+    auto s=planner.settings();s.pickupWeight=pickup;s.pickupApproachWeight=pickup*.0175f;s.attackWeight=attackWeightLocked()?0:attack;
     planner.configure(s);lastFrame=std::numeric_limits<u32>::max();
 }
 AI_EXPORT void th06_ai_danger(float weight){
