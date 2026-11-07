@@ -38,10 +38,14 @@ context=vm.createContext({
   }),
 });
 try{
-  // Consume startup failures so a failed loader produces one useful error.
-  const entry='createWasm().then(()=>run());';
-  assert.ok(code.includes(entry),'Unrecognized runtime startup; update the loader check');
-  vm.runInContext(code.replace(entry,'createWasm().then(()=>run()).catch(Module.onAbort);'),context,
+  const promiseEntry='createWasm().then(()=>run());';
+  const callbackEntry='createWasm();run();';
+  assert.ok(code.includes(promiseEntry)||code.includes(callbackEntry),
+    'Unrecognized runtime startup; update the loader check');
+  // Emscripten 4 schedules run through its dependency callbacks. Emscripten 6
+  // exposes the startup promise here, so forward its rejection to the check.
+  const loader=code.replace(promiseEntry,'createWasm().then(()=>run()).catch(Module.onAbort);');
+  vm.runInContext(loader,context,
     {filename:'th06.js',timeout:10000});
   await loaded;
   assert.equal(typeof context.Module._th06_ai_metric,'function','AI exports must be present');
