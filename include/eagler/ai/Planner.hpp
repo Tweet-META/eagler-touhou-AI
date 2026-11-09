@@ -8,7 +8,7 @@
 namespace eagler::ai {
 struct Vec2 { float x=0, y=0; };
 struct Bounds { float left=0, top=0, right=384, bottom=448; };
-enum class Shape : std::uint32_t { Circle=0, Box=1, Capsule=2 };
+enum class Shape : std::uint32_t { Circle=0, Box=1, Capsule=2, LaserBox=3, BodyCircle=4 };
 // Positions, sizes and speeds are in playfield pixels and logical frames.
 // Capsule endpoints have independent linear velocities. Box angles are radians.
 struct Hazard {
@@ -26,6 +26,10 @@ struct Player {
     int invulnerableFrames=0;
     // For titles that compare AABBs in the hazard's collision coordinates.
     std::optional<Vec2> boxHalfSize{};
+    // Retail games using the sum of squared radii for circular bullets.
+    std::optional<float> orthogonalCircleRadius{};
+    std::optional<Vec2> laserBoxHalfSize{};
+    std::optional<float> orthogonalBodyRadius{};
 };
 // Semantic buttons; the title adapter maps these to its own input bits.
 enum Button : std::uint32_t {

@@ -8,6 +8,7 @@
     "build:th07": "node scripts/build-th07.mjs",
     "build:th06": "node scripts/build-th06.mjs",
     "build:th06-online": "node scripts/build-th06-online.mjs",
+    "build:online": "node scripts/build-online.mjs",
     "start": "node scripts/serve.mjs"
   }
 }

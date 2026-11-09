@@ -60,7 +60,7 @@ async function control(message){
       return globalThis.__eaglerAiControls(request);
     },args:[message]});
   const reply=replies.find(entry=>entry.result)?.result;
-  if(!reply)throw Error('请启用扩展后，在主站重新启动红魔乡多人游戏');
+  if(!reply)throw Error('请启用扩展后，在主站重新启动已适配的多人游戏');
   return reply;
 }
 

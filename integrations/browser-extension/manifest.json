@@ -1,8 +1,8 @@
 {
   "manifest_version":3,
   "name":"Eagler Touhou · 我的 AI 接管",
-  "version":"0.1.3",
-  "description":"在自己的浏览器中用 AI 接管红魔乡联机座位。",
+  "version":"0.2.0",
+  "description":"在自己的浏览器中用 AI 接管东方联机座位。",
   "permissions":["scripting","activeTab"],
   "host_permissions":["https://touhouonline.com/*","https://*.touhouonline.com/*","https://touhou.vip/*","https://*.touhou.vip/*","http://127.0.0.1/*","http://localhost/*"],
   "background":{"service_worker":"background.js","type":"module"},

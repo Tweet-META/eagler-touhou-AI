@@ -2,6 +2,7 @@ import {spawn} from 'node:child_process';
 import {access,mkdir,cp,copyFile,readFile,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {packageExtension} from './package-extension.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const arg=name=>process.argv.find(value=>value.startsWith(`--${name}=`))?.slice(name.length+3);
@@ -68,7 +69,7 @@ await run(cmake,['-S',stage,'-B',binary,'-G','Ninja',
   '-DSDLTTF_SAMPLES=OFF','-DSDLTTF_TESTS=OFF','-DSDLTTF_PLUTOSVG=OFF']);
 await run(cmake,['--build',binary,'--target','th06','--parallel',arg('jobs')??'6']);
 await run(process.execPath,[path.join(root,'scripts/check-th06-runtime.mjs'),binary]);
-await cp(path.join(root,'integrations/browser-extension'),extension,{recursive:true});
+await packageExtension(root);
 await mkdir(path.join(extension,'runtime'),{recursive:true});
 for(const file of ['th06.js','th06.wasm'])await copyFile(path.join(binary,file),path.join(extension,'runtime',file));
 // The extension reuses the deployed page's canvas, bootstrap, RPC and DATA.

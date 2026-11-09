@@ -9,7 +9,13 @@
   const settings={enabled:false,strength:'strong',team:0,horizon:6,beam:2,duration:1,delay:0,
     switchWeight:.025,pickup:3,attack:.2,edge:1,edgeDistance:80,danger:10,density:.1,autoBomb:true};
   let initialized=false,dirty=true;
-  const ready=()=>typeof Module?._th06_ai_metric==='function';
+  const runtime=()=>globalThis.__eaglerAiModule??globalThis.Module;
+  const symbol=name=>{
+    const core=runtime();
+    return core?.['_eagler_ai_'+name]??core?.['_th06_ai_'+name];
+  };
+  const call=(name,...args)=>symbol(name)?.(...args);
+  const ready=()=>typeof symbol('metric')==='function';
   function syncStrength(){
     const matches=preset=>Object.entries(preset).every(([key,value])=>settings[key]===value);
     if(presets[settings.strength]&&matches(presets[settings.strength]))return;
@@ -17,25 +23,25 @@
   }
   function apply(){
     if(!ready())return;
-    Module._th06_ai_follow_attack(+(settings.strength==='weak'));
-    Module._th06_ai_team_mode(settings.team);
-    Module._th06_ai_configure(settings.horizon,settings.beam,40000);
-    Module._th06_ai_action_duration(settings.duration);
-    Module._th06_ai_input_delay(settings.delay);
-    Module._th06_ai_switch_weight(settings.switchWeight);
-    Module._th06_ai_objectives(settings.pickup,settings.attack);
-    Module._th06_ai_edges(settings.edge,settings.edgeDistance);
-    Module._th06_ai_danger(settings.danger);Module._th06_ai_density(settings.density);
-    Module._th06_ai_auto_bomb(+settings.autoBomb);
-    Module._th06_ai_enable(+settings.enabled);
+    call('follow_attack',+(settings.strength==='weak'));
+    call('team_mode',settings.team);
+    call('configure',settings.horizon,settings.beam,40000);
+    call('action_duration',settings.duration);
+    call('input_delay',settings.delay);
+    call('switch_weight',settings.switchWeight);
+    call('objectives',settings.pickup,settings.attack);
+    call('edges',settings.edge,settings.edgeDistance);
+    call('danger',settings.danger);call('density',settings.density);
+    call('auto_bomb',+settings.autoBomb);
+    call('enable',+settings.enabled);
     initialized=true;dirty=false;
   }
   function snapshot(){
-    if(ready()&&initialized&&!dirty)settings.enabled=!!Module._th06_ai_metric(0);
-    const configuredSeat=Module.eaglerOptions?.netplayPlayer;
-    return {ok:true,ready:ready(),settings:{...settings},active:ready()&&!!Module._th06_ai_metric(1),
-      seat:Number.isInteger(configuredSeat)&&configuredSeat>=0?configuredSeat:ready()?Module._th06_ai_metric(29):null,ms:ready()?Module._th06_ai_metric(2):0,
-      hazards:ready()?Module._th06_ai_metric(4):0};
+    if(ready()&&initialized&&!dirty)settings.enabled=!!call('metric',0);
+    const configuredSeat=runtime()?.eaglerOptions?.netplayPlayer;
+    return {ok:true,ready:ready(),settings:{...settings},active:ready()&&!!call('metric',1),
+      seat:Number.isInteger(configuredSeat)&&configuredSeat>=0?configuredSeat:ready()?call('metric',29):null,ms:ready()?call('metric',2):0,
+      hazards:ready()?call('metric',4):0};
   }
   globalThis.__eaglerAiControls=request=>{
     if(request.action==='preset'){
@@ -60,12 +66,12 @@
   badge.title='只接管自己的联机座位；点击切换，扩展图标可选择实力';
   badge.onclick=()=>{
     globalThis.__eaglerAiControls({action:'enabled',value:!settings.enabled});
-    Module.canvas?.focus();
+    runtime()?.canvas?.focus();
   };
   document.body.append(badge);
   setInterval(()=>{
     if(dirty)apply();
     const state=snapshot();
-    badge.textContent=!state.ready?'AI 加载中':`${settings.enabled?'AI 接管':'手动操作'} · F8`;
+    badge.textContent=!state.ready?'AI 加载中':`${settings.enabled?'AI 接管':'手动操作'}${globalThis.__eaglerAiModule?'':' · F8'}`;
   },250);
 })();

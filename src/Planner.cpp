@@ -46,21 +46,24 @@ float distance(const Hazard& h,Vec2 from,Vec2 to,int frame,const Player& player,
     to=add(from,mul(delta,hi-lo));
     const Vec2 a=at(h,lo),b=at(h,hi);
     const float dt=hi-lo;
-    if(h.shape==Shape::Circle){
+    if(h.shape==Shape::Circle||h.shape==Shape::BodyCircle){
         // Relative segment catches fast bullets crossing between two ticks.
         const float curve=std::sqrt(length2(h.acceleration))*dt*dt*.125f;
-        return std::sqrt(pointSegment2({},sub(from,a),sub(to,b)))-h.radius-boundingRadius-curve;
+        const auto nativeRadius=h.shape==Shape::BodyCircle?player.orthogonalBodyRadius:player.orthogonalCircleRadius;
+        const float reach=nativeRadius?std::hypot(h.radius,*nativeRadius):h.radius+boundingRadius;
+        return std::sqrt(pointSegment2({},sub(from,a),sub(to,b)))-reach-curve;
     }
-    if(h.shape==Shape::Box){
+    if(h.shape==Shape::Box||h.shape==Shape::LaserBox){
         const float mid=(lo+hi)*.5f,angle=h.angle+h.angularVelocity*mid;
         const float cs=std::cos(angle),sn=std::sin(angle);
         const auto rotate=[&](Vec2 v){return Vec2{v.x*cs+v.y*sn,-v.x*sn+v.y*cs};};
         // The native laser check also transforms only the player's center,
         // then applies the player's original half-extents in laser space.
-        const Vec2 halfSize=add(h.halfSize,player.boxHalfSize.value_or(Vec2{}));
+        const auto nativeHalfSize=h.shape==Shape::LaserBox&&player.laserBoxHalfSize?player.laserBoxHalfSize:player.boxHalfSize;
+        const Vec2 halfSize=add(h.halfSize,nativeHalfSize.value_or(Vec2{}));
         const float angular=std::sqrt(length2(halfSize))*std::min(2.f,std::abs(h.angularVelocity)*dt*.5f);
         const float curve=std::sqrt(length2(h.acceleration))*dt*dt*.125f;
-        const float radius=player.boxHalfSize?0.f:player.radius;
+        const float radius=nativeHalfSize?0.f:player.radius;
         return std::sqrt(rectangleDistance2(rotate(sub(from,a)),rotate(sub(to,b)),halfSize))-radius-angular-curve;
     }
     // Independent endpoint velocities describe moving/deforming laser pieces.
@@ -80,7 +83,7 @@ template<class B> float lowerBound2(B b,Vec2 a,Vec2 c){
     return x*x+y*y;
 }
 bool valid(const Hazard& h){
-    return std::uint32_t(h.shape)<=2&&finite(h.position)&&finite(h.velocity)&&finite(h.acceleration)&&
+    return h.shape<=Shape::BodyCircle&&finite(h.position)&&finite(h.velocity)&&finite(h.acceleration)&&
         finite(h.end)&&finite(h.endVelocity)&&finite(h.halfSize)&&finite(h.radius)&&finite(h.angle)&&finite(h.angularVelocity)&&
         h.radius>=0&&h.halfSize.x>=0&&h.halfSize.y>=0&&finite(h.densityScale)&&h.densityScale>=0;
 }
@@ -169,6 +172,9 @@ Result Planner::decide(const World& w){
     const auto& p=w.player;const auto& c=config_;const auto b=w.bounds;
     if(!finite(p.position)||!finite(p.radius)||p.radius<0||!finite(p.fastSpeed)||p.fastSpeed<0||
        (p.boxHalfSize&&(!finite(*p.boxHalfSize)||p.boxHalfSize->x<0||p.boxHalfSize->y<0))||
+       (p.orthogonalCircleRadius&&(!finite(*p.orthogonalCircleRadius)||*p.orthogonalCircleRadius<0))||
+       (p.laserBoxHalfSize&&(!finite(*p.laserBoxHalfSize)||p.laserBoxHalfSize->x<0||p.laserBoxHalfSize->y<0))||
+       (p.orthogonalBodyRadius&&(!finite(*p.orthogonalBodyRadius)||*p.orthogonalBodyRadius<0))||
        !finite(p.slowSpeed)||p.slowSpeed<0||!finite(w.goal)||!finite(b.left)||!finite(b.top)||
        !finite(b.right)||!finite(b.bottom)||b.left>b.right||b.top>b.bottom||
        !finite(w.formationGoal)||!finite(w.formationWeight)||!finite(w.formationSlack)||
@@ -220,7 +226,9 @@ Result Planner::decide(const World& w){
     if(w.incomplete||w.hazardCount>MaxHazards)result.flags|=IncompleteWorld;
     entries_.clear();order_.clear();tree_.clear();
     const bool collectDensity=c.densityWeight>0;
-    const float boundingRadius=p.boxHalfSize?std::sqrt(length2(*p.boxHalfSize)):p.radius;
+    const float boxRadius=p.boxHalfSize?std::sqrt(length2(*p.boxHalfSize)):p.radius;
+    const float laserRadius=p.laserBoxHalfSize?std::sqrt(length2(*p.laserBoxHalfSize)):0.f;
+    const float boundingRadius=std::max({boxRadius,laserRadius,p.orthogonalCircleRadius.value_or(0.f),p.orthogonalBodyRadius.value_or(0.f)});
     const float reach=std::max(p.fastSpeed,p.slowSpeed)*c.horizon+boundingRadius+std::max(c.proximityRange,collectDensity?32.f:0.f);
     for(std::size_t i=0;i<std::min<std::size_t>(w.hazardCount,MaxHazards);++i){
         const auto& h=w.hazards[i];if(!valid(h)){result.flags|=IncompleteWorld;continue;}
@@ -232,7 +240,7 @@ Result Planner::decide(const World& w){
         if(h.acceleration.x){const float t=-h.velocity.x/h.acceleration.x;if(t>lo&&t<hi)include(at(h,t));}
         if(h.acceleration.y){const float t=-h.velocity.y/h.acceleration.y;if(t>lo&&t<hi)include(at(h,t));}
         if(h.shape==Shape::Capsule){include(endAt(h,lo));include(endAt(h,hi));}
-        const float extent=h.shape==Shape::Box?std::sqrt(length2(h.halfSize)):h.radius;
+        const float extent=h.shape==Shape::Box||h.shape==Shape::LaserBox?std::sqrt(length2(h.halfSize)):h.radius;
         box.l-=extent;box.t-=extent;box.r+=extent;box.b+=extent;
         if(lowerBound2(box,p.position,p.position)>reach*reach)continue;
         if(entries_.size()>=std::size_t(c.maxHazards)){result.flags|=IncompleteWorld;continue;}
