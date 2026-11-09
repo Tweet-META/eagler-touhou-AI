@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace eagler::ai {
@@ -23,6 +24,8 @@ struct Player {
     Vec2 position{};
     float radius=2, fastSpeed=4, slowSpeed=2;
     int invulnerableFrames=0;
+    // For titles that compare AABBs in the hazard's collision coordinates.
+    std::optional<Vec2> boxHalfSize{};
 };
 // Semantic buttons; the title adapter maps these to its own input bits.
 enum Button : std::uint32_t {
@@ -113,7 +116,7 @@ private:
     std::vector<Tree> tree_;
     std::vector<Route> beam_,next_,candidates_;
     int build(int begin,int end);
-    bool clearance(Vec2 from,Vec2 to,int frame,float playerRadius,bool collectDensity,
+    bool clearance(Vec2 from,Vec2 to,int frame,const Player& player,float boundingRadius,bool collectDensity,
                    Statistics& stats,float& margin,float& density) const;
 };
 } // namespace eagler::ai

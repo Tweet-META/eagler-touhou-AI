@@ -310,9 +310,7 @@ std::uint16_t Th07Ai::filter(std::uint16_t input){
     w.commitFirstAction=true;w.committedAction=heldAction;
     w.committedFrames=actionRemaining+(actionTickValid&&actionTickFrame==decisionFrame()?1:0);
     w.player.position={p.pos.x,p.pos.y};
-    // TH07 uses an axis-aligned player square; its circumscribed circle is a
-    // conservative fit for the shared planner's circular player geometry.
-    w.player.radius=std::hypot(p.hitboxSize.x,p.hitboxSize.y);
+    w.player.boxHalfSize=Vec2{p.hitboxSize.x,p.hitboxSize.y};
     // TH07's Bomb speed modifiers are equal on both axes (Master Spark: 0.3).
     // Keep planning during Bomb, using its real slowdown instead of stopping.
     const float movementScale=scale*std::min(p.horizontalMovementSpeedMultiplierDuringBomb,

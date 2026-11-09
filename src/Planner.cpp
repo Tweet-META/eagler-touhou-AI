@@ -35,7 +35,7 @@ float rectangleDistance2(Vec2 a,Vec2 b,Vec2 half){
 }
 Vec2 at(const Hazard& h,float t){return add(h.position,add(mul(h.velocity,t),mul(h.acceleration,.5f*t*t)));}
 Vec2 endAt(const Hazard& h,float t){return add(h.end,mul(h.endVelocity,t));}
-float distance(const Hazard& h,Vec2 from,Vec2 to,int frame,float playerRadius){
+float distance(const Hazard& h,Vec2 from,Vec2 to,int frame,const Player& player,float boundingRadius){
     // Clip the movement interval to the hazard's lifetime. Birth at the tick
     // endpoint must not make its position one tick early along the whole path.
     const float lo=std::max(float(frame-1),float(h.activeFrom));
@@ -49,15 +49,19 @@ float distance(const Hazard& h,Vec2 from,Vec2 to,int frame,float playerRadius){
     if(h.shape==Shape::Circle){
         // Relative segment catches fast bullets crossing between two ticks.
         const float curve=std::sqrt(length2(h.acceleration))*dt*dt*.125f;
-        return std::sqrt(pointSegment2({},sub(from,a),sub(to,b)))-h.radius-playerRadius-curve;
+        return std::sqrt(pointSegment2({},sub(from,a),sub(to,b)))-h.radius-boundingRadius-curve;
     }
     if(h.shape==Shape::Box){
         const float mid=(lo+hi)*.5f,angle=h.angle+h.angularVelocity*mid;
         const float cs=std::cos(angle),sn=std::sin(angle);
         const auto rotate=[&](Vec2 v){return Vec2{v.x*cs+v.y*sn,-v.x*sn+v.y*cs};};
-        const float angular=std::sqrt(length2(h.halfSize))*std::min(2.f,std::abs(h.angularVelocity)*dt*.5f);
+        // The native laser check also transforms only the player's center,
+        // then applies the player's original half-extents in laser space.
+        const Vec2 halfSize=add(h.halfSize,player.boxHalfSize.value_or(Vec2{}));
+        const float angular=std::sqrt(length2(halfSize))*std::min(2.f,std::abs(h.angularVelocity)*dt*.5f);
         const float curve=std::sqrt(length2(h.acceleration))*dt*dt*.125f;
-        return std::sqrt(rectangleDistance2(rotate(sub(from,a)),rotate(sub(to,b)),h.halfSize))-playerRadius-angular-curve;
+        const float radius=player.boxHalfSize?0.f:player.radius;
+        return std::sqrt(rectangleDistance2(rotate(sub(from,a)),rotate(sub(to,b)),halfSize))-radius-angular-curve;
     }
     // Independent endpoint velocities describe moving/deforming laser pieces.
     // Freeze the segment at the middle and enlarge by its endpoint displacement
@@ -67,7 +71,7 @@ float distance(const Hazard& h,Vec2 from,Vec2 to,int frame,float playerRadius){
     const Vec2 middle=mul(add(relative0,relative1),.5f);
     const float deformation=std::sqrt(length2(sub(relative1,relative0)))*.5f;
     const float curve=std::sqrt(length2(h.acceleration))*dt*dt*.125f;
-    return std::sqrt(segments2(sub(from,a),sub(to,b),{},middle))-h.radius-playerRadius-deformation-curve;
+    return std::sqrt(segments2(sub(from,a),sub(to,b),{},middle))-h.radius-boundingRadius-deformation-curve;
 }
 template<class B> B unite(B a,B b){return {std::min(a.l,b.l),std::min(a.t,b.t),std::max(a.r,b.r),std::max(a.b,b.b)};}
 template<class B> float lowerBound2(B b,Vec2 a,Vec2 c){
@@ -81,6 +85,11 @@ bool valid(const Hazard& h){
         h.radius>=0&&h.halfSize.x>=0&&h.halfSize.y>=0&&finite(h.densityScale)&&h.densityScale>=0;
 }
 float positive(float x,float fallback,float maximum){return finite(x)&&x>=0?std::min(x,maximum):fallback;}
+bool blocked(float clearance,float safetyMargin,const Player& player){
+    // Overlapping or touching boxes give zero distance. They still collide
+    // when the caller has disabled the extra safety margin.
+    return clearance<safetyMargin||(player.boxHalfSize&&clearance<=0.f);
+}
 Vec2 direction(std::uint32_t b){
     float x=float(bool(b&Right))-float(bool(b&Left)),y=float(bool(b&Down))-float(bool(b&Up));
     if(x&&y){x*=.7071067811865475f;y*=.7071067811865475f;}
@@ -130,7 +139,7 @@ int Planner::build(int begin,int end){
     }
     return id;
 }
-bool Planner::clearance(Vec2 from,Vec2 to,int frame,float radius,bool collectDensity,Statistics& stats,float& margin,float& density) const {
+bool Planner::clearance(Vec2 from,Vec2 to,int frame,const Player& player,float boundingRadius,bool collectDensity,Statistics& stats,float& margin,float& density) const {
     margin=config_.proximityRange;density=0;if(tree_.empty())return true;
     std::array<int,32> stack{};int count=1;stack[0]=0;
     while(count){
@@ -138,18 +147,18 @@ bool Planner::clearance(Vec2 from,Vec2 to,int frame,float radius,bool collectDen
         ++stats.treeVisits;const auto& n=tree_[stack[--count]];
         // Keep searching the density neighborhood until its capped penalty is
         // saturated, then resume nearest-only pruning. Zero weight is free.
-        const float range=std::max(collectDensity&&density<8?32.f:0.f,margin)+radius;
+        const float range=std::max(collectDensity&&density<8?32.f:0.f,margin)+boundingRadius;
         if(lowerBound2(n.bounds,from,to)>range*range)continue;
         if(n.left>=0){stack[count++]=n.right;stack[count++]=n.left;continue;}
         for(int i=n.begin;i<n.end;++i){
             const auto& h=entries_[order_[i]].hazard;
             if(frame<h.activeFrom||frame-1>h.activeUntil)continue;
             if(stats.collisionTests>=config_.maxCollisionTests)return false;
-            ++stats.collisionTests;const float d=distance(h,from,to,frame,radius);
+            ++stats.collisionTests;const float d=distance(h,from,to,frame,player,boundingRadius);
             margin=std::min(margin,d);
             if(collectDensity&&h.densityScale>0&&frame>=h.activeFrom&&frame<=h.activeUntil)
                 density=std::min(8.f,density+std::min(1.f,h.densityScale)*std::max(0.f,1-std::max(0.f,d)/32));
-            if(margin<config_.safetyMargin)return true;
+            if(blocked(margin,config_.safetyMargin,player))return true;
         }
     }
     return true;
@@ -159,6 +168,7 @@ Result Planner::decide(const World& w){
     if(!w.active){result.flags=Inactive;previous_=0;return result;}
     const auto& p=w.player;const auto& c=config_;const auto b=w.bounds;
     if(!finite(p.position)||!finite(p.radius)||p.radius<0||!finite(p.fastSpeed)||p.fastSpeed<0||
+       (p.boxHalfSize&&(!finite(*p.boxHalfSize)||p.boxHalfSize->x<0||p.boxHalfSize->y<0))||
        !finite(p.slowSpeed)||p.slowSpeed<0||!finite(w.goal)||!finite(b.left)||!finite(b.top)||
        !finite(b.right)||!finite(b.bottom)||b.left>b.right||b.top>b.bottom||
        !finite(w.formationGoal)||!finite(w.formationWeight)||!finite(w.formationSlack)||
@@ -210,7 +220,8 @@ Result Planner::decide(const World& w){
     if(w.incomplete||w.hazardCount>MaxHazards)result.flags|=IncompleteWorld;
     entries_.clear();order_.clear();tree_.clear();
     const bool collectDensity=c.densityWeight>0;
-    const float reach=std::max(p.fastSpeed,p.slowSpeed)*c.horizon+p.radius+std::max(c.proximityRange,collectDensity?32.f:0.f);
+    const float boundingRadius=p.boxHalfSize?std::sqrt(length2(*p.boxHalfSize)):p.radius;
+    const float reach=std::max(p.fastSpeed,p.slowSpeed)*c.horizon+boundingRadius+std::max(c.proximityRange,collectDensity?32.f:0.f);
     for(std::size_t i=0;i<std::min<std::size_t>(w.hazardCount,MaxHazards);++i){
         const auto& h=w.hazards[i];if(!valid(h)){result.flags|=IncompleteWorld;continue;}
         if(h.activeFrom>c.horizon||h.activeUntil<0||h.activeFrom>h.activeUntil)continue;
@@ -259,8 +270,8 @@ Result Planner::decide(const World& w){
                     Vec2 to=add(r.p,move);to.x=std::clamp(to.x,b.left,b.right);to.y=std::clamp(to.y,b.top,b.bottom);
                     float margin=c.proximityRange,density=0;
                     if(elapsed+f>p.invulnerableFrames){
-                        if(!clearance(r.p,to,elapsed+f,p.radius,collectDensity,result.stats,margin,density)){exhausted=true;safe=false;break;}
-                        if(margin<c.safetyMargin){safe=false;break;}
+                        if(!clearance(r.p,to,elapsed+f,p,boundingRadius,collectDensity,result.stats,margin,density)){exhausted=true;safe=false;break;}
+                        if(blocked(margin,c.safetyMargin,p)){safe=false;break;}
                     }
                     r.margin=std::min(r.margin,margin);
                     r.cost+=c.dangerWeight/(std::max(.1f,margin)+2);
