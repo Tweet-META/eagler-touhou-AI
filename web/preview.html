@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>东方 · 本地 AI 合作</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10151c;color:#e5e9ef;font:15px/1.6 system-ui}
+main{max-width:1200px;margin:20px auto;padding:0 16px}h1{font-size:24px}
+section{display:grid;grid-template-columns:minmax(0,800px) minmax(250px,1fr);gap:20px}
+iframe{width:100%;aspect-ratio:4/3;border:1px solid #53687b;background:#000}
+label{display:block;margin:12px 0}select,button{font:inherit;background:#243443;color:inherit;border:1px solid #53687b;border-radius:5px;padding:6px}
+button{cursor:pointer}input[type=range]{width:100%}a{color:#91c9fc}pre{white-space:pre-wrap;color:#a6d8c5}p{color:#a8b7c9}
+details{border:1px solid #354657;border-radius:6px;padding:10px;margin-top:18px}summary{cursor:pointer}
+@media(max-width:900px){section{grid-template-columns:1fr}}
+</style>
+<main>
+<h1>你 + AI · 本地合作</h1>
+<section><iframe id="game" title="本地游戏" allow="autoplay; fullscreen; gamepad"></iframe><aside>
+<label>作品 <select id="title"></select></label>
+<label>难度 <select id="difficulty"><option value="0">Easy</option><option value="1" selected>Normal</option><option value="2">Hard</option><option value="3">Lunatic</option><option value="4">Extra</option></select></label>
+<label>你的机体 <select id="human"></select></label>
+<label>AI 机体 <select id="partner"></select></label>
+<button id="start">开始 / 重新开始</button> <button id="focus">操作游戏</button>
+<pre id="status">选择作品与机体，点击开始。</pre>
+<label>AI 实力 <select id="strength"><option value="strong">强强（L混关实力）</option><option value="stronger">这么强？！（LNB实力）</option><option value="capable">有点强（H混关实力）</option><option value="clumsy">不太聪明的ai</option><option value="weak">弱弱？！</option></select></label>
+<label>配合方式 <select id="team"><option value="0">跟随队友</option><option value="1">分别压制</option></select></label>
+<label><input id="enabled" type="checkbox" checked> AI 开启</label>
+<details><summary>高级选项</summary><div id="parameters"></div><label><input id="autoBomb" type="checkbox" checked> AI 无路时放雷</label><pre id="metrics"></pre></details>
+<p>方向键移动，Z 射击，Shift 低速，X 放雷，Esc 暂停。你控制 P1，AI 控制 P2。菜单与对话由你操作。</p>
+<p>使用各作多人模式的规则。游戏数据和存档保存在本机浏览器中。</p>
+<a href="./">合成弹幕</a> · <a href="./th06.html">红魔乡</a> · <a href="./th07.html">妖妖梦</a>
+</aside></section></main>
+<script type="module" src="./preview.mjs"></script>
+</html>

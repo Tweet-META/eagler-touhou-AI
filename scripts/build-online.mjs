@@ -10,6 +10,7 @@ const source = option('source');
 const sdk = option('emsdk') ?? process.env.EMSDK;
 const game = option('game');
 const generation = option('generation');
+const preview = process.argv.includes('--preview');
 if (generation && !/^[a-f0-9]{64}$/.test(generation)) throw Error('Invalid runtime generation');
 if (!source || !sdk) throw Error('Required: --source=/path/to/eagler-touhou --emsdk=/path/to/emsdk');
 
@@ -69,17 +70,17 @@ const ports = {
 const port = ports[game];
 if (!port) throw Error(`Unsupported module runtime: ${game}`);
 
-const common = path.resolve(source, 'common');
+let common = path.resolve(source, 'common');
 const portName = `${game}-mp`;
 const donor = path.resolve(source, 'ports', portName);
-const work = path.join(root, 'build', 'online-modules');
+const work = path.join(root, 'build', preview ? 'preview-modules' : 'online-modules');
 const build = path.join(work, game);
 const overlay = path.join(build, 'overlay');
 const stage = path.join(overlay, 'ports', portName);
 const output = path.join(build, 'web');
 const temp = path.join(build, 'tmp');
 const extension = path.join(root, 'build', 'browser-extension');
-const runtime = path.join(extension, 'runtime', 'modules', game);
+const runtime = preview ? path.join(root, 'web', 'previews', game) : path.join(extension, 'runtime', 'modules', game);
 for (const dir of [stage, output, temp, runtime]) await mkdir(dir, {recursive:true});
 
 const excluded = new Set(['.git', 'node_modules', 'artifacts', 'decompiled', 'build-eagler-multiplayer', 'assets']);
@@ -115,7 +116,42 @@ if (game === 'th15') {
 ${method}`));
 }
 const hooked = replaceOnce(owner, port.include, `${port.include}\n#include "EaglerAiAdapter.hpp"\n#include "EaglerAiPlanner.inc"`);
-await writeFile(ownerPath, replaceOnce(hooked, port.input, port.patch));
+let patch = port.patch;
+if (preview) {
+    common = path.join(overlay, 'common');
+    await cp(path.resolve(source, 'common'), common, {recursive:true,
+        filter:entry=>!path.relative(path.resolve(source, 'common'),entry).split(path.sep).some(s=>['.git','node_modules','artifacts'].includes(s))});
+    const gateFile = path.join(common, 'src/netplay/NetplaySession.cpp');
+    await writeFile(gateFile, replaceOnce(await readFile(gateFile, 'utf8'),
+        '    configured_ = true;', '    configured_ = true;\n    peerHello_.fill(true);\n    peerReady_.fill(true);\n    localReady_ = true;'));
+    if (game === 'th11') {
+        const file = path.join(stage, 'portable/common-revision.mjs');
+        await writeFile(file, (await readFile(file,'utf8')).replace(
+            "process.env.EAGLER_COMMON_ROOT || resolve(import.meta.dirname, '../../../common')",
+            JSON.stringify(path.resolve(source, 'common'))));
+    }
+    const nativeDirectory = path.join(stage, game === 'th12' ? 'src/multiplayer' : 'web/cpp/multiplayer');
+    const connection = path.join(nativeDirectory, game === 'th08' ? 'NetworkConnection.cpp' : 'NetplayRuntime.cpp');
+    const text = await readFile(connection, 'utf8');
+    const connect = /bool (?:NetworkConnection|NetplayRuntime)::Connect\(const char\* \w+\)\s*\{/;
+    if (!connect.test(text)) throw Error(game + ': local connection seam changed');
+    await writeFile(connection, text.replace(connect, match=>match+'\n    return '+(game==='th08'?'net.Configured()':'configured_')+';'));
+    const variable = {th08:'sample',th10:'local',th11:'input',th12:'input',th15:'sampled'}[game];
+    const network = {th08:'net',th10:'runtime',th11:'app.netplay',th12:'network',th15:'network'}[game];
+    const frame = {th08:'frame',th10:'frame',th11:'app.netplay.CaptureFrame()',th12:'network.CaptureFrame()',th15:'network.CaptureFrame()'}[game];
+    const call = patch.match(/eagler::ai::online::captureTh\d+\([\s\S]*?;/)?.[0];
+    if (!call) throw Error(game+': AI call not found');
+    let ai = call.replace(new RegExp('\\b'+variable+'\\b','g'), 'aiInput')
+        .replace('net.Setup().local_player','1').replace('app.netplay.Setup().local_player','1')
+        .replace('options.local','1').replace('network.Setup().local_player','1');
+    if (game === 'th10') ai = ai.replace('aiInput, *world, frame)', 'aiInput, *world, frame, 1)');
+    if (game === 'th15') patch = patch.replace('if(stage)'+call, call);
+    patch = patch.replace(call, `{ Netplay::FrameInput aiInput;
+      ${game === 'th15' ? 'if(stage)' : ''}${ai}
+      ${network}.SubmitRemote(1, ${frame}, aiInput);
+    }`);
+}
+await writeFile(ownerPath, replaceOnce(hooked, port.input, patch));
 await copyFile(path.join(root, 'include/eagler/ai/Planner.hpp'), path.join(ownerDir, 'Planner.hpp'));
 await copyFile(path.join(root, 'include/eagler/ai/InputDelay.hpp'), path.join(ownerDir, 'InputDelay.hpp'));
 await copyFile(path.join(root, 'integrations/online/Seat.hpp'), path.join(ownerDir, 'Seat.hpp'));
@@ -187,4 +223,4 @@ export default async function createAiRuntime(options = {}) {
 }
 `);
 await writeFile(path.join(runtime, 'catalog.json'), JSON.stringify({game, module:`${port.module}.mjs`, generation}));
-await packageExtension(root);
+if (!preview) await packageExtension(root);

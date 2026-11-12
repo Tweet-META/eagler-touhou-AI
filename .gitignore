@@ -2,5 +2,7 @@
 /web/runtime/
 /web/th06-runtime/
 /web/th07-runtime/
+/web/previews/
+/web/preview-controls.js
 /.cache/
 *.log

@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {readFile,stat} from 'node:fs/promises';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 const port=Number(process.argv[2]??8144);
-const types={'.html':'text/html; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm'};
+const types={'.html':'text/html; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.json':'application/json; charset=utf-8','.css':'text/css; charset=utf-8','.ogg':'audio/ogg','.png':'image/png'};
 const server=http.createServer(async(req,res)=>{
   try{
     const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);

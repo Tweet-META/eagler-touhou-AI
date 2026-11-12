@@ -3,9 +3,9 @@
 #include "World.hpp"
 
 namespace eagler::ai::online {
-inline void captureTh10(Netplay::FrameInput& input, const th10::browser::World& game, unsigned frame) {
+inline void captureTh10(Netplay::FrameInput& input, const th10::browser::World& game, unsigned frame, unsigned selectedSeat = 255) {
     const auto& actors = game.actors;
-    const unsigned seat = game.local_player;
+    const unsigned seat = selectedSeat == 255 ? game.local_player : selectedSeat;
     const bool playing = !game.loading && actors.session && actors.gui && !actors.gui->dialogue &&
         !(actors.session->session_flags & 0x74u) && !(input.buttons & 8) && game.engine.speed > 0;
     aiSeat.capture(input, {16, 32, 64, 128}, seat, frame,

@@ -52,6 +52,8 @@
     }else if(request.action==='team'){
       if(request.value!==0&&request.value!==1)return {ok:false,error:'未知配合方式'};
       settings.team=request.value;dirty=true;apply();
+    }else if(request.action==='autoBomb'){
+      settings.autoBomb=!!request.value;dirty=true;apply();
     }else if(request.action==='parameter'){
       const limits={horizon:[6,24],beam:[2,16],duration:[1,12],delay:[0,30],switchWeight:[0,2],
         pickup:[0,6],attack:[0,2],edge:[0,5],edgeDistance:[1,160],danger:[0,100],density:[0,2]};
