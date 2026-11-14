@@ -95,7 +95,10 @@ addEventListener('message',async event=>{
     try {
         keyboardMapping(current);
         const base='./previews/'+current.game+'/private/';
-        const resources=[{path:'/msgothic.ttc',url:base+'msgothic.ttc'},{path:'/unifont.otf',url:base+'unifont.otf'},...current.metadata.music];
+        // The game iframe resolves resource URLs against its own directory.
+        // Resolve every parent-owned URL here before crossing that boundary.
+        const resources=[{path:'/msgothic.ttc',url:base+'msgothic.ttc'},{path:'/unifont.otf',url:base+'unifont.otf'},...current.metadata.music]
+            .map(resource=>({...resource,url:new URL(resource.url,document.baseURI).href}));
         await rpc('configure',{language:'ja',music:current.metadata.music.length?'ogg':'none',
             resources,sharedResources:[],options:current.options});
         controls({action:'preset',value:$('strength').value});
